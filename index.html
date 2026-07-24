@@ -1,0 +1,4198 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🎴 寶可夢卡牌搜尋雷達</title>
+
+    <!-- Leaflet CSS (local copy — avoids CDN ERR_CONNECTION_CLOSED) -->
+    <link rel="stylesheet" href="leaflet/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            display: none;
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-weight: bold;
+            font-size: 18px;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        /* Filter Panel */
+        .filter-panel {
+            position: absolute;
+            top: 70px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            max-width: 220px;
+            width: calc(100% - 20px);
+        }
+
+        .filter-panel h3 {
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 6px;
+        }
+
+        .filter-item {
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .filter-item label {
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .filter-item input[type="checkbox"] {
+            width: 20px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        /* Buttons */
+        .button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .button-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .button-secondary {
+            background: #f44336;
+            color: white;
+        }
+
+        .button-success {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .button:active {
+            transform: scale(0.95);
+        }
+
+        /* Locate Me Button */
+        .locate-btn {
+            position: absolute;
+            bottom: 120px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 50%;
+            width: 55px;
+            height: 55px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .locate-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* Search Area Button */
+        .search-area-btn {
+            position: absolute;
+            bottom: 60px;
+            right: 10px;
+            z-index: 1000;
+            background: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 55px;
+            height: 55px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .search-area-btn.active {
+            background: #f44336;
+        }
+
+        .search-area-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* Radius Info Panel */
+        .radius-info {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: white;
+            border-radius: 12px 12px 0 0;
+            padding: 10px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+            display: none;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+
+        .radius-info.show {
+            display: block;
+        }
+
+        .radius-info h4 {
+            margin: 0 0 8px 0;
+            color: #FF9800;
+            font-size: 14px;
+        }
+
+        .radius-info .count {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 5px 0;
+        }
+
+        .radius-info .details {
+            font-size: 11px;
+            color: #666;
+            margin-top: 6px;
+            line-height: 1.5;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .radius-info .details > div {
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+
+        /* Custom Marker Icons */
+        .marker-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            background: white;
+        }
+
+        .marker-no-parking {
+            border-color: #9E9E9E;
+        }
+
+        .marker-gym {
+            background: #f44336;
+            color: white;
+            font-size: 20px;
+        }
+
+        .marker-user {
+            background: #2196F3;
+            color: white;
+            font-size: 20px;
+        }
+
+        .marker-visited {
+            opacity: 0.4;
+            filter: grayscale(80%);
+        }
+
+        /* Popup Styles */
+        .leaflet-popup-content {
+            margin: 15px;
+            font-size: 14px;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .popup-brand {
+            display: inline-block;
+            padding: 4px 10px;
+            background: #667eea;
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .popup-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            color: white;
+        }
+
+        .popup-button.navigate {
+            background: #4285F4;
+        }
+
+        .popup-button.visit {
+            background: #4CAF50;
+        }
+
+        .popup-button.unvisit {
+            background: #FF9800;
+        }
+
+        .popup-button:hover {
+            opacity: 0.9;
+        }
+
+        /* Mobile Optimizations — keep the filter panel as compact as possible */
+        @media (max-width: 768px) {
+            .header {
+                font-size: 14px;
+                padding: 10px 16px;
+            }
+
+            .filter-panel {
+                top: 10px;
+                right: 8px;
+                max-width: 150px;
+                padding: 6px;
+                border-radius: 10px;
+            }
+
+            .filter-panel h3 {
+                font-size: 12px;
+                margin-bottom: 5px;
+                padding-bottom: 4px;
+            }
+
+            .filter-item {
+                margin: 3px 0;
+                padding: 3px 5px;
+                border-radius: 5px;
+            }
+
+            .filter-item label {
+                font-size: 11px;
+            }
+
+            .filter-item input[type="checkbox"] {
+                width: 15px;
+                height: 15px;
+            }
+
+            /* Tighten the indented brand / gym sub-filters */
+            #brandFilters, #gymFilters {
+                margin-left: 8px !important;
+                margin-top: 3px !important;
+            }
+        }
+        .store-marker-in-radius {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            font-size: 24px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .store-marker-in-radius:hover {
+            transform: scale(1.15);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header (Hidden) -->
+    <div class="header" style="display: none;">
+        🎴 寶可夢卡牌搜尋雷達
+    </div>
+
+    <!-- Custom Dialog Overlay -->
+    <div id="customDialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 16px; max-width: 320px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <div id="dialogTitle" style="font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #333;"></div>
+            <div id="dialogMessage" style="font-size: 13px; line-height: 1.5; color: #666; margin-bottom: 16px; white-space: pre-wrap;"></div>
+            <div id="dialogButtons" style="display: flex; gap: 8px; justify-content: flex-end;"></div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Filter Panel -->
+    <div class="filter-panel" id="filterPanel">
+        <h3 style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleFilterPanel()">
+            <span>🔍 篩選</span>
+            <span id="filterToggleIcon">▼</span>
+        </h3>
+
+        <div id="filterContent">
+            <div class="filter-item">
+                <label for="filterStores">顯示便利店</label>
+                <input type="checkbox" id="filterStores" checked>
+            </div>
+
+            <!-- Brand filters (shown when stores are visible) -->
+            <div id="brandFilters" style="margin-left: 15px; margin-top: 5px;">
+                <div class="filter-item" style="background: #e8f5e9;">
+                    <label for="filter7Eleven">🟢 7-Eleven</label>
+                    <input type="checkbox" id="filter7Eleven" checked>
+                </div>
+                <div class="filter-item" style="background: #e3f2fd;">
+                    <label for="filterLawson">🔵 Lawson</label>
+                    <input type="checkbox" id="filterLawson" checked>
+                </div>
+                <div class="filter-item" style="background: #fff9e6;">
+                    <label for="filterFamilyMart">🟡 FamilyMart</label>
+                    <input type="checkbox" id="filterFamilyMart" checked>
+                </div>
+            </div>
+
+            <div class="filter-item">
+                <label for="filterGyms">顯示寶可夢店</label>
+                <input type="checkbox" id="filterGyms" checked>
+            </div>
+
+            <!-- Gym type filters -->
+            <div id="gymFilters" style="margin-left: 15px; margin-top: 5px;">
+                <div class="filter-item" style="background: #ffebee;">
+                    <label for="filterPokemonCenter">⭐ 寶可夢中心</label>
+                    <input type="checkbox" id="filterPokemonCenter" checked>
+                </div>
+                <div class="filter-item" style="background: #fce4ec;">
+                    <label for="filterCardShop">🏪 卡牌店</label>
+                    <input type="checkbox" id="filterCardShop" checked>
+                </div>
+            </div>
+        </div> <!-- End filterContent -->
+    </div> <!-- End filter-panel -->
+
+    <!-- Locate Me Button -->
+    <button class="locate-btn" id="locateBtn" title="顯示我的位置">
+        📍
+    </button>
+
+    <!-- Search Area Button -->
+    <button class="search-area-btn" id="searchAreaBtn" title="設定搜尋範圍">
+        🎯
+    </button>
+
+    <!-- Route Planning Button -->
+    <button class="search-area-btn" id="routePlanBtn" title="路線規劃" style="bottom: 180px; background: #2196F3;">
+        🗺️
+    </button>
+
+    <!-- Radius Info Panel -->
+    <div class="radius-info" id="radiusInfo">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="margin: 0;">📍 搜尋範圍內</h4>
+        </div>
+        <div style="margin: 6px 0;">
+            <label for="radiusSlider" style="font-size: 11px; color: #666;">半徑: <span id="radiusValue">2.0</span> km</label>
+            <input type="range" id="radiusSlider" min="1" max="5" step="0.5" value="2"
+                   style="width: 100%; margin: 3px 0;">
+        </div>
+        <div class="count" id="radiusCount">0 間</div>
+        <div class="details" id="radiusDetails"></div>
+        <div id="radiusButtons" style="margin-top: 8px;"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">資料載入中...</div>
+    </div>
+
+    <!-- Leaflet JS (local copy — avoids CDN ERR_CONNECTION_CLOSED) -->
+    <script src="leaflet/leaflet.js"></script>
+
+    <script>
+        // ==================== Configuration ====================
+        const DEFAULT_RADIUS_METERS = 2000; // Default 2km radius
+        const STORAGE_KEY = 'pokemonTCG_visitedStores';
+
+        // ==================== Custom Dialog Functions ====================
+        function showCustomAlert(title, message, callback) {
+            const dialog = document.getElementById('customDialog');
+            const dialogTitle = document.getElementById('dialogTitle');
+            const dialogMessage = document.getElementById('dialogMessage');
+            const dialogButtons = document.getElementById('dialogButtons');
+
+            dialogTitle.textContent = title;
+            // Check if message contains HTML
+            if (message.includes('<a href=')) {
+                dialogMessage.innerHTML = message.replace(/\n/g, '<br>');
+            } else {
+                dialogMessage.textContent = message;
+            }
+            dialogButtons.innerHTML = '<button onclick="closeCustomDialog()" style="padding: 10px 24px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">OK</button>';
+
+            dialog.style.display = 'flex';
+
+            window.customDialogCallback = callback;
+        }
+
+        function showCustomConfirm(title, message, onConfirm, onCancel) {
+            const dialog = document.getElementById('customDialog');
+            const dialogTitle = document.getElementById('dialogTitle');
+            const dialogMessage = document.getElementById('dialogMessage');
+            const dialogButtons = document.getElementById('dialogButtons');
+
+            dialogTitle.textContent = title;
+            dialogMessage.innerHTML = message; // Changed from textContent to innerHTML to support HTML content
+            dialogButtons.innerHTML = `
+                <button onclick="closeCustomDialog(false)" style="padding: 10px 24px; background: #999; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">取消</button>
+                <button onclick="closeCustomDialog(true)" style="padding: 10px 24px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">OK</button>
+            `;
+
+            dialog.style.display = 'flex';
+
+            window.customDialogOnConfirm = onConfirm;
+            window.customDialogOnCancel = onCancel;
+        }
+
+        function closeCustomDialog(result) {
+            console.log('closeCustomDialog called with result:', result);
+            const dialog = document.getElementById('customDialog');
+            dialog.style.display = 'none';
+
+            // Double check dialog is truly hidden
+            setTimeout(function() {
+                const dialogCheck = document.getElementById('customDialog');
+                const styles = window.getComputedStyle(dialogCheck);
+                console.log('Dialog after close - display:', styles.display, 'z-index:', styles.zIndex);
+            }, 200);
+
+            // Save callbacks before clearing
+            const onConfirm = window.customDialogOnConfirm;
+            const onCancel = window.customDialogOnCancel;
+            const genericCallback = window.customDialogCallback;
+
+            // Clean up immediately to allow nested dialogs
+            window.customDialogCallback = null;
+            window.customDialogOnConfirm = null;
+            window.customDialogOnCancel = null;
+
+            console.log('customDialogOnConfirm:', onConfirm);
+            console.log('customDialogOnCancel:', onCancel);
+
+            // Execute callbacks after cleanup
+            if (result === true && onConfirm) {
+                console.log('Executing onConfirm callback');
+                onConfirm();
+            } else if (result === false && onCancel) {
+                console.log('Executing onCancel callback');
+                onCancel();
+            } else if (genericCallback) {
+                console.log('Executing generic callback');
+                genericCallback();
+            }
+        }
+
+        // Brand emoji icons
+        const BRAND_ICONS = {
+            '7-Eleven': '🟢',      // Green circle for 7-Eleven
+            'Lawson': '🔵',        // Blue circle for Lawson
+            'FamilyMart': '🟡',    // Yellow circle for FamilyMart
+        };
+
+        // Prefecture display names in Traditional Chinese (keys match PREFECTURE_CENTERS)
+        const PREFECTURE_NAMES_ZH = {
+            '青森県': '青森縣', '岩手県': '岩手縣', '宮城県': '宮城縣',
+            '秋田県': '秋田縣', '山形県': '山形縣', '福島県': '福島縣',
+            '東京都': '東京都', '神奈川県': '神奈川縣', '千葉県': '千葉縣',
+            '埼玉県': '埼玉縣', '茨城県': '茨城縣', '栃木県': '栃木縣', '群馬県': '群馬縣',
+            '大阪府': '大阪府', '京都府': '京都府', '兵庫県': '兵庫縣',
+            '奈良県': '奈良縣', '滋賀県': '滋賀縣', '和歌山県': '和歌山縣',
+            '福岡県': '福岡縣', '佐賀県': '佐賀縣', '長崎県': '長崎縣',
+            '熊本県': '熊本縣', '大分県': '大分縣', '宮崎県': '宮崎縣', '鹿児島県': '鹿兒島縣'
+        };
+
+        // Prefecture centers for zoom level <= 8
+        const PREFECTURE_CENTERS = {
+            // 東北 (Tohoku)
+            '青森県': { lat: 40.8244, lon: 140.7400, name: '青森県' },
+            '岩手県': { lat: 39.7036, lon: 141.1527, name: '岩手県' },
+            '宮城県': { lat: 38.2682, lon: 140.8721, name: '宮城県' },
+            '秋田県': { lat: 39.7186, lon: 140.1024, name: '秋田県' },
+            '山形県': { lat: 38.2404, lon: 140.3633, name: '山形県' },
+            '福島県': { lat: 37.7503, lon: 140.4676, name: '福島県' },
+
+            // 関東 (Kanto)
+            '東京都': { lat: 35.6895, lon: 139.6917, name: '東京都' },
+            '神奈川県': { lat: 35.4478, lon: 139.6425, name: '神奈川県' },
+            '千葉県': { lat: 35.6074, lon: 140.1065, name: '千葉県' },
+            '埼玉県': { lat: 35.8569, lon: 139.6489, name: '埼玉県' },
+            '茨城県': { lat: 36.3418, lon: 140.4467, name: '茨城県' },
+            '栃木県': { lat: 36.5658, lon: 139.8836, name: '栃木県' },
+            '群馬県': { lat: 36.3911, lon: 139.0608, name: '群馬県' },
+
+            // 関西 (Kansai)
+            '大阪府': { lat: 34.6937, lon: 135.5023, name: '大阪府' },
+            '京都府': { lat: 35.0211, lon: 135.7556, name: '京都府' },
+            '兵庫県': { lat: 34.6913, lon: 135.1830, name: '兵庫県' },
+            '奈良県': { lat: 34.6851, lon: 135.8050, name: '奈良県' },
+            '滋賀県': { lat: 35.0045, lon: 135.8686, name: '滋賀県' },
+            '和歌山県': { lat: 34.2261, lon: 135.1675, name: '和歌山県' },
+
+            // 九州 (Kyushu)
+            '福岡県': { lat: 33.6064, lon: 130.4181, name: '福岡県' },
+            '佐賀県': { lat: 33.2494, lon: 130.2988, name: '佐賀県' },
+            '長崎県': { lat: 32.7503, lon: 129.8777, name: '長崎県' },
+            '熊本県': { lat: 32.8031, lon: 130.7079, name: '熊本県' },
+            '大分県': { lat: 33.2382, lon: 131.6126, name: '大分県' },
+            '宮崎県': { lat: 31.9077, lon: 131.4202, name: '宮崎県' },
+            '鹿児島県': { lat: 31.5602, lon: 130.5581, name: '鹿児島県' }
+        };
+
+        // City centers for zoom level 9-10
+        let CITY_CENTERS = {};
+
+        // Get prefecture by coordinates
+        function getPrefecture(lat, lon) {
+            // 東北 (Tohoku)
+            if (lat >= 40.2 && lon >= 140.0 && lon <= 141.5) return '青森県';
+            if (lat >= 39.1 && lat < 40.6 && lon >= 139.5 && lon < 140.8) return '秋田県';
+            if (lat >= 38.9 && lat < 40.6 && lon >= 140.8 && lon <= 142.0) return '岩手県';
+            if (lat >= 37.7 && lat < 39.1 && lon >= 139.5 && lon < 140.5) return '山形県';
+            if (lat >= 37.8 && lat < 39.1 && lon >= 140.5 && lon <= 141.5) return '宮城県';
+            if (lat >= 36.8 && lat < 37.8 && lon >= 139.5 && lon <= 141.0) return '福島県';
+
+            // 関東 (Kanto) - 擴大範圍以覆蓋更多店鋪
+            if (lat >= 35.4 && lat < 36.2 && lon >= 139.3 && lon < 140.0) return '東京都';
+            if (lat >= 34.9 && lat < 35.7 && lon >= 138.8 && lon < 139.8) return '神奈川県';
+            if (lat >= 34.8 && lat < 36.2 && lon >= 139.7 && lon < 141.0) return '千葉県';
+            if (lat >= 35.6 && lat < 36.4 && lon >= 138.8 && lon < 140.0) return '埼玉県';
+            if (lat >= 35.8 && lat < 37.0 && lon >= 139.6 && lon < 141.0) return '茨城県';
+            if (lat >= 36.1 && lat < 37.1 && lon >= 139.2 && lon < 140.4) return '栃木県';
+            if (lat >= 35.9 && lat < 37.0 && lon >= 138.3 && lon < 139.6) return '群馬県';
+
+            // 関西 (Kansai) - 擴大範圍
+            if (lat >= 34.2 && lat < 35.1 && lon >= 135.0 && lon < 135.9) return '大阪府';
+            if (lat >= 34.6 && lat < 35.8 && lon >= 134.9 && lon < 136.1) return '京都府';
+            if (lat >= 34.2 && lat < 35.8 && lon >= 134.2 && lon < 135.6) return '兵庫県';
+            if (lat >= 33.8 && lat < 35.0 && lon >= 135.4 && lon < 136.3) return '奈良県';
+            if (lat >= 34.7 && lat < 35.6 && lon >= 135.6 && lon < 136.6) return '滋賀県';
+            if (lat >= 33.4 && lat < 34.6 && lon >= 134.9 && lon < 136.0) return '和歌山県';
+
+            // 九州 (Kyushu) - 擴大範圍以覆蓋邊界店鋪
+            if (lat >= 33.1 && lat < 34.1 && lon >= 129.6 && lon < 131.1) return '福岡県';
+            if (lat >= 32.9 && lat < 33.7 && lon >= 129.7 && lon < 130.7) return '佐賀県';
+            if (lat >= 32.4 && lat < 33.6 && lon >= 129.0 && lon < 130.3) return '長崎県';
+            if (lat >= 32.0 && lat < 33.4 && lon >= 130.0 && lon < 131.4) return '熊本県';
+            if (lat >= 32.7 && lat < 33.9 && lon >= 130.7 && lon < 132.1) return '大分県';
+            if (lat >= 31.3 && lat < 32.9 && lon >= 130.6 && lon < 132.0) return '宮崎県';
+            if (lat >= 30.9 && lat < 32.4 && lon >= 129.8 && lon < 131.2) return '鹿児島県';
+
+            return null;
+        }
+
+        // Get city name from address
+        function getCityFromAddress(address) {
+            if (!address) return null;
+
+            // Extract city name (format: "県名 市名 ...")
+            const match = address.match(/[都道府県][^\s]*?\s+([^市]+市)/);
+            if (match) {
+                return match[1];
+            }
+            return null;
+        }
+
+        // Get nearest city by coordinates
+        function getNearestCity(lat, lon) {
+            const pref = getPrefecture(lat, lon);
+            if (!pref || !CITY_CENTERS[pref]) return null;
+
+            let nearestCity = null;
+            let minDistance = Infinity;
+
+            // Calculate distance to each city center in the prefecture
+            Object.keys(CITY_CENTERS[pref]).forEach(cityName => {
+                const cityCenter = CITY_CENTERS[pref][cityName];
+                const distance = Math.sqrt(
+                    Math.pow(lat - cityCenter.lat, 2) +
+                    Math.pow(lon - cityCenter.lon, 2)
+                );
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestCity = cityName;
+                }
+            });
+
+            return nearestCity;
+        }
+
+        // Load city centers data
+        async function loadCityCenters() {
+            try {
+                const response = await fetch('city_centers.json');
+                CITY_CENTERS = await response.json();
+            } catch (error) {
+                console.log('City centers data not available');
+            }
+        }
+
+        // ==================== State ====================
+        let currentRadiusMeters = DEFAULT_RADIUS_METERS;
+        let map;
+        let userMarker;
+        let allStores = [];
+        let allGyms = [];
+        let storeMarkers = [];
+        let gymMarkers = [];
+        let visitedStores = new Set();
+        let searchMode = false;
+        let searchMarker = null;
+        let searchCircle = null;
+
+        // Route planning state
+        let routePlanningMode = false;
+        let routePoints = []; // Changed to array to support multiple points
+        let routeMarkers = []; // Changed to array
+        let routeLine = null;
+        let routeBuffer = null;
+        let areaMarkers = []; // Area cluster markers showing store counts
+        let areaDetailMode = false; // Track if showing area details
+        let currentAreaStores = []; // Stores in currently viewed area
+
+        // ==================== Initialize ====================
+        // ==================== Filter Panel Toggle ====================
+        function toggleFilterPanel() {
+            const filterContent = document.getElementById('filterContent');
+            const toggleIcon = document.getElementById('filterToggleIcon');
+
+            if (filterContent.style.display === 'none') {
+                filterContent.style.display = 'block';
+                toggleIcon.textContent = '▼';
+            } else {
+                filterContent.style.display = 'none';
+                toggleIcon.textContent = '▶';
+            }
+        }
+
+        // Make it global for onclick handler
+        window.toggleFilterPanel = toggleFilterPanel;
+
+        // ==================== Initialization ====================
+        function init() {
+            // Initialize map centered on Tohoku region (wider view)
+            // Center: Miyagi/Iwate border, Zoom: 8 (shows all Tohoku)
+            map = L.map('map').setView([38.8, 140.9], 8);
+
+            // Add tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18
+            }).addTo(map);
+
+            // Load visited stores from localStorage
+            loadVisitedStores();
+
+            // Load data
+            loadData();
+
+            // Setup event listeners
+            setupEventListeners();
+
+            // On small screens, collapse the filter panel by default so it
+            // takes up as little space as possible. Tap the header to expand.
+            if (window.matchMedia('(max-width: 768px)').matches) {
+                document.getElementById('filterContent').style.display = 'none';
+                document.getElementById('filterToggleIcon').textContent = '▶';
+            }
+
+            // Note: Don't auto-request user location if not in Japan
+            // User can manually click the locate button
+        }
+
+        // ==================== Data Loading ====================
+        async function loadData() {
+            try {
+                // Load stores
+                const storesResponse = await fetch('stores.json');
+                if (storesResponse.ok) {
+                    allStores = await storesResponse.json();
+                    console.log(`Loaded ${allStores.length} stores`);
+                } else {
+                    console.warn('stores.json not found, using empty array');
+                    allStores = [];
+                }
+
+                // Load gyms
+                const gymsResponse = await fetch('gyms.json');
+                if (gymsResponse.ok) {
+                    allGyms = await gymsResponse.json();
+                    console.log(`Loaded ${allGyms.length} gyms`);
+                } else {
+                    console.warn('gyms.json not found, using empty array');
+                    allGyms = [];
+                }
+
+                // Load city centers
+                await loadCityCenters();
+
+                // Render markers
+                renderMarkers();
+
+                // Hide loading overlay
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showCustomAlert('錯誤', '資料載入失敗: ' + error.message);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        }
+
+        // ==================== User Location ====================
+        function getUserLocation() {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+
+                        // Center map on user location
+                        map.setView([lat, lon], 13);
+
+                        // Add user marker
+                        if (userMarker) {
+                            map.removeLayer(userMarker);
+                        }
+
+                        const userIcon = L.divIcon({
+                            className: 'marker-icon marker-user',
+                            html: '👤',
+                            iconSize: [35, 35]
+                        });
+
+                        userMarker = L.marker([lat, lon], { icon: userIcon })
+                            .addTo(map)
+                            .bindPopup('<div class="popup-title">📍 我的位置</div>');
+                    },
+                    error => {
+                        console.warn('Geolocation error:', error);
+                        showCustomAlert('錯誤', '無法取得位置資訊。請檢查瀏覽器設定。');
+                    }
+                );
+            } else {
+                showCustomAlert('錯誤', '呢個瀏覽器唔支援定位功能。');
+            }
+        }
+
+        // ==================== Marker Rendering ====================
+        function renderMarkers() {
+            // Don't render if in route mode with active route
+            if (routePoints.length >= 2) {
+                return; // Route markers are handled by renderMarkersInRoute
+            }
+
+            // Clear existing markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+            gymMarkers = [];
+
+            const filters = getFilters();
+            const zoom = map.getZoom();
+
+            // Dynamic clustering radius based on zoom level
+            // Zoom 5-6: 50km, Zoom 7-8: 25km, Zoom 9-10: 10km, Zoom 11-12: 5km, Zoom 13: 2km, Zoom 14+: 1km
+            let clusterRadius;
+            if (zoom <= 6) {
+                clusterRadius = 50000; // 50km
+            } else if (zoom <= 8) {
+                clusterRadius = 25000; // 25km
+            } else if (zoom <= 10) {
+                clusterRadius = 10000; // 10km
+            } else if (zoom <= 12) {
+                clusterRadius = 5000; // 5km
+            } else if (zoom <= 13) {
+                clusterRadius = 2000; // 2km
+            } else {
+                clusterRadius = 1000; // 1km
+            }
+
+            // Collect stores to display
+            const storesToDisplay = [];
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+                    storesToDisplay.push(store);
+                });
+            }
+
+            // Prefecture-level view for zoom <= 8
+            if (zoom <= 8) {
+                renderPrefectureView(storesToDisplay, filters);
+                return;
+            }
+
+            // City-level view for zoom 9-10
+            if (zoom >= 9 && zoom <= 10 && Object.keys(CITY_CENTERS).length > 0) {
+                renderCityView(storesToDisplay, filters);
+                return;
+            }
+
+            // Grid-based clustering for performance (zoom >= 11)
+            const gridSize = clusterRadius / 111000; // Approximate degrees
+            const grid = new Map();
+
+            storesToDisplay.forEach(store => {
+                const gridX = Math.floor(store.latitude / gridSize);
+                const gridY = Math.floor(store.longitude / gridSize);
+                const key = `${gridX},${gridY}`;
+
+                if (!grid.has(key)) {
+                    grid.set(key, []);
+                }
+                grid.get(key).push(store);
+            });
+
+            // Render each grid cell
+            grid.forEach((stores) => {
+                if (stores.length === 1) {
+                    // Single store
+                    const store = stores[0];
+                    const isVisited = visitedStores.has(getStoreKey(store));
+                    const brandIcon = BRAND_ICONS[store.brand] || '🏪';
+
+                    let iconClass = 'marker-icon marker-no-parking';
+                    if (isVisited) iconClass += ' marker-visited';
+
+                    const icon = L.divIcon({
+                        className: iconClass,
+                        html: brandIcon,
+                        iconSize: [40, 40]
+                    });
+
+                    const marker = L.marker([store.latitude, store.longitude], { icon })
+                        .addTo(map)
+                        .bindPopup(createStorePopup(store));
+
+                    storeMarkers.push(marker);
+                } else {
+                    // Cluster
+                    const count = stores.length;
+                    let sumLat = 0, sumLng = 0;
+                    const brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+
+                    stores.forEach(s => {
+                        sumLat += s.latitude;
+                        sumLng += s.longitude;
+                        if (brandCounts[s.brand] !== undefined) {
+                            brandCounts[s.brand]++;
+                        }
+                    });
+
+                    const centerLat = sumLat / count;
+                    const centerLng = sumLng / count;
+
+                    // Create popup
+                    let popupHtml = `<div style="min-width: 180px;">`;
+                    popupHtml += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 6px;">呢個範圍內嘅店舖</div>`;
+                    popupHtml += `<div style="font-size: 13px; margin-bottom: 6px;">合共: <strong>${count}</strong> 間</div>`;
+                    popupHtml += `<div style="font-size: 11px; color: #666;">`;
+                    if (brandCounts['7-Eleven'] > 0) popupHtml += `🟢 7-Eleven: ${brandCounts['7-Eleven']}<br>`;
+                    if (brandCounts['Lawson'] > 0) popupHtml += `🔵 Lawson: ${brandCounts['Lawson']}<br>`;
+                    if (brandCounts['FamilyMart'] > 0) popupHtml += `🟡 FamilyMart: ${brandCounts['FamilyMart']}<br>`;
+                    popupHtml += `</div>`;
+                    popupHtml += `<div style="font-size: 10px; color: #999; margin-top: 6px;">放大可睇個別店舖</div>`;
+                    popupHtml += `</div>`;
+
+                    const size = Math.min(50, 30 + Math.log(count) * 5);
+                    const fontSize = Math.min(18, 12 + Math.log(count) * 2);
+                    const iconHtml = `<div style="background: #2196F3; color: white; border-radius: 50%; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: ${fontSize}px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">${count}</div>`;
+
+                    const marker = L.marker([centerLat, centerLng], {
+                        icon: L.divIcon({
+                            className: 'cluster-marker',
+                            html: iconHtml,
+                            iconSize: [size, size]
+                        })
+                    }).addTo(map).bindPopup(popupHtml);
+
+                    storeMarkers.push(marker);
+                }
+            });
+
+            // Render gyms (no clustering)
+            if (filters.showGyms) {
+                allGyms.forEach(gym => {
+                    const isPokemonCenter = gym.official === true || gym.type === "Pokemon Center";
+                    const isCardShop = !isPokemonCenter;
+
+                    if (isPokemonCenter && !filters.showPokemonCenter) return;
+                    if (isCardShop && !filters.showCardShop) return;
+
+                    let iconHtml, iconClass;
+                    if (isPokemonCenter) {
+                        iconHtml = '⭐';
+                        iconClass = 'marker-icon marker-gym';
+                    } else {
+                        iconHtml = '🏪';
+                        iconClass = 'marker-icon marker-no-parking';
+                    }
+
+                    const icon = L.divIcon({
+                        className: iconClass,
+                        html: iconHtml,
+                        iconSize: [40, 40]
+                    });
+
+                    const marker = L.marker([gym.latitude, gym.longitude], { icon })
+                        .addTo(map)
+                        .bindPopup(createGymPopup(gym));
+
+                    gymMarkers.push(marker);
+                });
+            }
+
+            // Update radius count if active
+            if (searchCircle) {
+                updateRadiusCount();
+            }
+        }
+
+        // ==================== Prefecture View (Zoom <= 8) ====================
+        function renderPrefectureView(storesToDisplay, filters) {
+            const prefectureCounts = {};
+            const prefectureBrands = {};
+
+            // Count stores by prefecture
+            storesToDisplay.forEach(store => {
+                const pref = getPrefecture(store.latitude, store.longitude);
+                if (pref) {
+                    if (!prefectureCounts[pref]) {
+                        prefectureCounts[pref] = 0;
+                        prefectureBrands[pref] = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+                    }
+                    prefectureCounts[pref]++;
+                    if (prefectureBrands[pref][store.brand] !== undefined) {
+                        prefectureBrands[pref][store.brand]++;
+                    }
+                }
+            });
+
+            // ---- Phase 1: collect every prefecture that has stores, with its
+            //      geographic centre projected to screen (pixel) coordinates. ----
+            const labels = [];
+            Object.keys(PREFECTURE_CENTERS).forEach(pref => {
+                const count = prefectureCounts[pref] || 0;
+                if (count === 0) return;
+
+                const center = PREFECTURE_CENTERS[pref];
+                const prefZh = PREFECTURE_NAMES_ZH[pref] || pref;
+                // Approx pill width from label length so collision boxes are realistic.
+                const halfW = 22 + prefZh.length * 7 + String(count).length * 5;
+                labels.push({
+                    pref, prefZh, count,
+                    brands: prefectureBrands[pref],
+                    latlng: L.latLng(center.lat, center.lon),
+                    pt: map.latLngToLayerPoint([center.lat, center.lon]),
+                    halfW, halfH: 15
+                });
+            });
+
+            // ---- Phase 2: nudge overlapping labels apart on screen so no two
+            //      prefecture badges cover each other (Kanto/Kansai cluster tightly
+            //      at zoom 8). Simple iterative separation on layer-pixel positions. ----
+            for (let iter = 0; iter < 60; iter++) {
+                let moved = false;
+                for (let i = 0; i < labels.length; i++) {
+                    for (let j = i + 1; j < labels.length; j++) {
+                        const a = labels[i], b = labels[j];
+                        const dx = b.pt.x - a.pt.x;
+                        const dy = b.pt.y - a.pt.y;
+                        const overlapX = (a.halfW + b.halfW + 4) - Math.abs(dx);
+                        const overlapY = (a.halfH + b.halfH + 4) - Math.abs(dy);
+                        if (overlapX > 0 && overlapY > 0) {
+                            // Push apart along the axis of least overlap.
+                            if (overlapX < overlapY) {
+                                const shift = (overlapX / 2) * (dx < 0 ? -1 : 1);
+                                a.pt.x -= shift; b.pt.x += shift;
+                            } else {
+                                const shift = (overlapY / 2) * (dy < 0 ? -1 : 1);
+                                a.pt.y -= shift; b.pt.y += shift;
+                            }
+                            moved = true;
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+
+            // ---- Phase 3: place the (possibly nudged) badges. A thin connector line
+            //      links the badge back to the true prefecture centre when moved. ----
+            labels.forEach(item => {
+                const { prefZh, count, brands } = item;
+                const displayLatLng = map.layerPointToLatLng(item.pt);
+
+                // Create popup
+                let popupHtml = `<div style="min-width: 200px;">`;
+                popupHtml += `<div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; color: #667eea;">${prefZh}</div>`;
+                popupHtml += `<div style="font-size: 14px; margin-bottom: 8px;">合共: <strong style="color: #667eea;">${count}</strong> 間</div>`;
+                popupHtml += `<div style="font-size: 12px; color: #666;">`;
+                if (brands['7-Eleven'] > 0) popupHtml += `🟢 7-Eleven: ${brands['7-Eleven']}<br>`;
+                if (brands['Lawson'] > 0) popupHtml += `🔵 Lawson: ${brands['Lawson']}<br>`;
+                if (brands['FamilyMart'] > 0) popupHtml += `🟡 FamilyMart: ${brands['FamilyMart']}<br>`;
+                popupHtml += `</div>`;
+                popupHtml += `<div style="font-size: 11px; color: #999; margin-top: 8px; font-style: italic;">點一下放大</div>`;
+                popupHtml += `</div>`;
+
+                // Pill-shaped badge showing prefecture NAME + count as text, so每個
+                // 標記都清楚標明係邊個縣;經過 Phase 2 避讓後唔會互相遮擋。
+                const iconHtml = `<div style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 5px 10px; border-radius: 16px; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 3px 10px rgba(102, 126, 234, 0.5); cursor: pointer; white-space: nowrap;"><span>${prefZh}</span><span style="background: rgba(255,255,255,0.28); border-radius: 10px; padding: 1px 7px; font-size: 12px;">${count}</span></div>`;
+
+                // Connector from the true centre to the nudged badge, if it moved.
+                const origPt = map.latLngToLayerPoint(item.latlng);
+                const dist = origPt.distanceTo(item.pt);
+                if (dist > 6) {
+                    const connector = L.polyline([item.latlng, displayLatLng], {
+                        color: '#764ba2', weight: 1.5, opacity: 0.5, dashArray: '3, 3'
+                    }).addTo(map);
+                    storeMarkers.push(connector);
+                    const dot = L.circleMarker(item.latlng, {
+                        radius: 3, color: '#764ba2', fillColor: '#764ba2', fillOpacity: 1, weight: 0
+                    }).addTo(map);
+                    storeMarkers.push(dot);
+                }
+
+                const marker = L.marker(displayLatLng, {
+                    icon: L.divIcon({
+                        className: 'prefecture-marker',
+                        html: iconHtml,
+                        iconSize: null,          // let content size itself (variable-width pill)
+                        iconAnchor: [item.halfW, item.halfH]
+                    })
+                }).addTo(map).bindPopup(popupHtml);
+
+                // Click to zoom in on the real prefecture centre
+                marker.on('click', function() {
+                    map.setView([item.latlng.lat, item.latlng.lng], 10);
+                });
+
+                storeMarkers.push(marker);
+            });
+
+            // Render gyms
+            if (filters.showGyms) {
+                renderGymsOnly(filters);
+            }
+        }
+
+        // ==================== City View (Zoom 9-10) ====================
+        function renderCityView(storesToDisplay, filters) {
+            console.log('renderCityView called, zoom:', map.getZoom());
+            console.log('CITY_CENTERS loaded:', Object.keys(CITY_CENTERS).length, 'prefectures');
+            console.log('storesToDisplay:', storesToDisplay.length);
+
+            const cityCounts = {};
+            const cityBrands = {};
+
+            // Count stores by city (using nearest city based on coordinates)
+            storesToDisplay.forEach(store => {
+                const pref = getPrefecture(store.latitude, store.longitude);
+                if (!pref || !CITY_CENTERS[pref]) return;
+
+                const cityName = getNearestCity(store.latitude, store.longitude);
+                if (cityName && CITY_CENTERS[pref][cityName]) {
+                    const key = `${pref}_${cityName}`;
+                    if (!cityCounts[key]) {
+                        cityCounts[key] = 0;
+                        cityBrands[key] = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0, pref, cityName };
+                    }
+                    cityCounts[key]++;
+                    if (cityBrands[key][store.brand] !== undefined) {
+                        cityBrands[key][store.brand]++;
+                    }
+                }
+            });
+
+            console.log('City counts:', Object.keys(cityCounts).length, 'cities found');
+
+            // Display one marker per city
+            Object.keys(cityCounts).forEach(key => {
+                const count = cityCounts[key];
+                if (count === 0) return;
+
+                const cityData = cityBrands[key];
+                const pref = cityData.pref;
+                const cityName = cityData.cityName;
+                const center = CITY_CENTERS[pref][cityName];
+
+                // Create popup
+                let popupHtml = `<div style="min-width: 180px;">`;
+                popupHtml += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 6px; color: #667eea;">${cityName}</div>`;
+                popupHtml += `<div style="font-size: 13px; margin-bottom: 6px;">合共: <strong style="color: #667eea;">${count}</strong> 間</div>`;
+                popupHtml += `<div style="font-size: 11px; color: #666;">`;
+                if (cityData['7-Eleven'] > 0) popupHtml += `🟢 7-Eleven: ${cityData['7-Eleven']}<br>`;
+                if (cityData['Lawson'] > 0) popupHtml += `🔵 Lawson: ${cityData['Lawson']}<br>`;
+                if (cityData['FamilyMart'] > 0) popupHtml += `🟡 FamilyMart: ${cityData['FamilyMart']}<br>`;
+                popupHtml += `</div>`;
+                popupHtml += `<div style="font-size: 10px; color: #999; margin-top: 6px; font-style: italic;">點一下放大</div>`;
+                popupHtml += `</div>`;
+
+                const size = Math.min(60, 30 + Math.log(count + 1) * 6);
+                const fontSize = Math.min(20, 12 + Math.log(count + 1) * 2);
+                const iconHtml = `<div style="background: linear-gradient(135deg, #48c6ef 0%, #6f86d6 100%); color: white; border-radius: 50%; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: ${fontSize}px; border: 2px solid white; box-shadow: 0 3px 10px rgba(72, 198, 239, 0.4); cursor: pointer;">${count}</div>`;
+
+                const marker = L.marker([center.lat, center.lon], {
+                    icon: L.divIcon({
+                        className: 'city-marker',
+                        html: iconHtml,
+                        iconSize: [size, size]
+                    })
+                }).addTo(map).bindPopup(popupHtml);
+
+                // Click to zoom in
+                marker.on('click', function() {
+                    map.setView([center.lat, center.lon], 13);
+                });
+
+                storeMarkers.push(marker);
+            });
+
+            // Render gyms
+            if (filters.showGyms) {
+                renderGymsOnly(filters);
+            }
+        }
+
+        // ==================== Render Gyms Only ====================
+        function renderGymsOnly(filters) {
+            allGyms.forEach(gym => {
+                const isPokemonCenter = gym.official === true || gym.type === "Pokemon Center";
+                const isCardShop = !isPokemonCenter;
+
+                if (isPokemonCenter && !filters.showPokemonCenter) return;
+                if (isCardShop && !filters.showCardShop) return;
+
+                let iconHtml, iconClass;
+                if (isPokemonCenter) {
+                    iconHtml = '⭐';
+                    iconClass = 'marker-icon marker-gym';
+                } else {
+                    iconHtml = '🏪';
+                    iconClass = 'marker-icon marker-no-parking';
+                }
+
+                const icon = L.divIcon({
+                    className: iconClass,
+                    html: iconHtml,
+                    iconSize: [40, 40]
+                });
+
+                const marker = L.marker([gym.latitude, gym.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(createGymPopup(gym));
+
+                gymMarkers.push(marker);
+            });
+        }
+
+        // ==================== Popup Creation ====================
+        function createStorePopup(store) {
+            const isVisited = visitedStores.has(getStoreKey(store));
+
+            const visitButtonText = isVisited ? '取消已到訪' : '標記已到訪';
+            const visitButtonClass = isVisited ? 'unvisit' : 'visit';
+
+            // Google Maps directions URL
+            const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${store.latitude},${store.longitude}`;
+
+            // Google Maps place URL - use exact coordinates with high zoom (more accurate)
+            const googleMapsPlaceUrl = `https://www.google.com/maps/place/@${store.latitude},${store.longitude},19z`;
+
+            return `
+                <div class="popup-title">${store.name}</div>
+                <div class="popup-brand">${store.brand}</div>
+                <div style="margin: 8px 0; font-size: 12px; color: #666;">
+                    📍 ${store.latitude.toFixed(6)}, ${store.longitude.toFixed(6)}
+                </div>
+                <a href="${googleMapsDirectionsUrl}" target="_blank" class="popup-button navigate">
+                    🧭 開始導航
+                </a>
+                <a href="${googleMapsPlaceUrl}" target="_blank" class="popup-button navigate" style="background: #34A853;">
+                    🗺 用 Google Maps 開啟
+                </a>
+                <button class="popup-button ${visitButtonClass}" onclick="toggleVisited('${getStoreKey(store)}')">
+                    ${isVisited ? '🔄' : '✅'} ${visitButtonText}
+                </button>
+            `;
+        }
+
+        function createGymPopup(gym) {
+            const isPokemonCenter = gym.official === true || gym.type === "Pokemon Center";
+            const typeLabel = isPokemonCenter ? "⭐ 寶可夢中心（官方）" : "🏪 卡牌店";
+            const typeBgColor = isPokemonCenter ? "#f44336" : "#9E9E9E";
+
+            // Google Maps directions URL
+            const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${gym.latitude},${gym.longitude}`;
+
+            // Google Maps place URL - search by name for better results
+            const searchQuery = encodeURIComponent(gym.name);
+            const googleMapsPlaceUrl = `https://www.google.com/maps/search/${searchQuery}/@${gym.latitude},${gym.longitude},17z`;
+
+            return `
+                <div class="popup-title">${gym.name}</div>
+                <div class="popup-brand" style="background: ${typeBgColor};">${typeLabel}</div>
+                <div style="margin: 8px 0; font-size: 13px;">${gym.address || ''}</div>
+                <a href="${googleMapsDirectionsUrl}" target="_blank" class="popup-button navigate">
+                    🧭 開始導航
+                </a>
+                <a href="${googleMapsPlaceUrl}" target="_blank" class="popup-button navigate" style="background: #34A853;">
+                    🗺 開啟店舖頁面
+                </a>
+            `;
+        }
+
+        // ==================== Visited Stores Management ====================
+        function getStoreKey(store) {
+            return `${store.latitude.toFixed(6)},${store.longitude.toFixed(6)}`;
+        }
+
+        function loadVisitedStores() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    const now = Date.now();
+                    const ONE_DAY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+                    // Check if data has timestamp format
+                    if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && 'timestamp' in data[0]) {
+                        // Filter out visits older than 24 hours
+                        const validVisits = data.filter(item => (now - item.timestamp) < ONE_DAY);
+                        visitedStores = new Set(validVisits.map(item => item.key));
+
+                        // Save filtered data back if some were removed
+                        if (validVisits.length !== data.length) {
+                            saveVisitedStores();
+                        }
+                    } else {
+                        // Old format (array of strings) - migrate to new format with current timestamp
+                        visitedStores = new Set(data);
+                        saveVisitedStores(); // Migrate to new format
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading visited stores:', error);
+            }
+        }
+
+        function saveVisitedStores() {
+            try {
+                const now = Date.now();
+                const dataWithTimestamp = Array.from(visitedStores).map(key => ({
+                    key: key,
+                    timestamp: now
+                }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(dataWithTimestamp));
+            } catch (error) {
+                console.error('Error saving visited stores:', error);
+            }
+        }
+
+        function toggleVisited(storeKey) {
+            if (visitedStores.has(storeKey)) {
+                visitedStores.delete(storeKey);
+            } else {
+                visitedStores.add(storeKey);
+            }
+            saveVisitedStores();
+            renderMarkers();
+            map.closePopup();
+        }
+
+        // Make toggleVisited global for onclick handler
+        window.toggleVisited = toggleVisited;
+
+        // ==================== Filter Management ====================
+        function getFilters() {
+            return {
+                showStores: document.getElementById('filterStores').checked,
+                showGyms: document.getElementById('filterGyms').checked,
+                show7Eleven: document.getElementById('filter7Eleven').checked,
+                showLawson: document.getElementById('filterLawson').checked,
+                showFamilyMart: document.getElementById('filterFamilyMart').checked,
+                showPokemonCenter: document.getElementById('filterPokemonCenter').checked,
+                showCardShop: document.getElementById('filterCardShop').checked
+            };
+        }
+
+        function setupEventListeners() {
+            // Filter checkboxes
+            document.getElementById('filterStores').addEventListener('change', renderMarkers);
+            document.getElementById('filterGyms').addEventListener('change', renderMarkers);
+
+            // Brand filter checkboxes
+            document.getElementById('filter7Eleven').addEventListener('change', renderMarkers);
+            document.getElementById('filterLawson').addEventListener('change', renderMarkers);
+            document.getElementById('filterFamilyMart').addEventListener('change', renderMarkers);
+
+            // Gym type filter checkboxes
+            document.getElementById('filterPokemonCenter').addEventListener('change', renderMarkers);
+            document.getElementById('filterCardShop').addEventListener('change', renderMarkers);
+
+            // Locate button
+            document.getElementById('locateBtn').addEventListener('click', getUserLocation);
+
+            // Search area button
+            document.getElementById('searchAreaBtn').addEventListener('click', toggleSearchMode);
+
+            // Route planning button
+            document.getElementById('routePlanBtn').addEventListener('click', toggleRoutePlanning);
+
+            // Radius slider
+            document.getElementById('radiusSlider').addEventListener('input', function(e) {
+                const radiusKm = parseFloat(e.target.value);
+                currentRadiusMeters = radiusKm * 1000;
+                document.getElementById('radiusValue').textContent = radiusKm.toFixed(1);
+
+                // Update circle if active (search radius mode)
+                if (searchCircle) {
+                    searchCircle.setRadius(currentRadiusMeters);
+                    updateRadiusCount();
+                    renderStoresInRadius(); // Re-render stores when radius changes
+                }
+
+                // Update route if active (route planning mode) - but not if search circle is active
+                if (routePoints.length >= 2 && !searchCircle) {
+                    // Just update the statistics
+                    countStoresAlongRoute();
+                }
+            });
+
+            // Add change event to update markers after slider is released
+            document.getElementById('radiusSlider').addEventListener('change', function(e) {
+                // Update markers when user releases the slider in route mode (but not if search circle is active)
+                if (routePoints.length >= 2 && !searchCircle) {
+                    renderMarkersInRoute();
+                }
+            });
+
+            // Map click for search and route planning
+            map.on('click', function(e) {
+                if (searchMode) {
+                    placeSearchArea(e);
+                } else if (routePlanningMode) {
+                    handleRouteClick(e);
+                }
+            });
+
+            // Map zoom event - re-cluster markers when zoom changes
+            map.on('zoomend', function() {
+                // If search circle is active, re-render stores in radius
+                if (searchCircle) {
+                    renderStoresInRadius();
+                }
+                // Only re-render if not in route planning mode, area detail mode, or search radius mode
+                else if (!routePlanningMode && !areaDetailMode) {
+                    renderMarkers();
+                }
+            });
+        }
+
+        // ==================== Search Radius Feature ====================
+        function toggleSearchMode() {
+            searchMode = !searchMode;
+            const btn = document.getElementById('searchAreaBtn');
+
+            if (searchMode) {
+                // Clear route planning mode if active
+                if (routePlanningMode) {
+                    toggleRoutePlanning();
+                }
+
+                // Hide all markers when entering search mode
+                map.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker) {
+                        if (layer !== searchMarker) {
+                            map.removeLayer(layer);
+                        }
+                    }
+                    // Check for marker cluster groups if available
+                    if (typeof L.MarkerClusterGroup !== 'undefined' && layer instanceof L.MarkerClusterGroup) {
+                        map.removeLayer(layer);
+                    }
+                });
+
+                btn.classList.add('active');
+                btn.innerHTML = '❌';
+                btn.title = '結束搜尋模式';
+                map.getContainer().style.cursor = 'crosshair';
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '🎯';
+                btn.title = '設定搜尋範圍';
+                map.getContainer().style.cursor = '';
+
+                // Re-render all markers if no search circle
+                if (!searchCircle) {
+                    renderMarkers();
+                }
+            }
+        }
+
+        function placeSearchArea(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+
+            // Remove existing search marker and circle
+            if (searchMarker) {
+                map.removeLayer(searchMarker);
+            }
+            if (searchCircle) {
+                map.removeLayer(searchCircle);
+            }
+
+            // Create new search marker
+            const searchIcon = L.divIcon({
+                className: 'marker-icon',
+                html: '🎯',
+                iconSize: [35, 35],
+                iconAnchor: [17, 17]
+            });
+
+            searchMarker = L.marker([lat, lon], { icon: searchIcon })
+                .addTo(map)
+                .bindPopup('<div class="popup-title">🎯 搜尋中心點</div>');
+
+            // Create circle with current radius
+            searchCircle = L.circle([lat, lon], {
+                radius: currentRadiusMeters,
+                color: '#FF9800',
+                fillColor: '#FF9800',
+                fillOpacity: 0.2
+            }).addTo(map);
+
+            // Update count
+            updateRadiusCount();
+
+            // Show only stores within radius
+            renderStoresInRadius();
+
+            // Exit search mode
+            toggleSearchMode();
+        }
+
+        // Render only stores within the search radius
+        function renderStoresInRadius() {
+            console.log('renderStoresInRadius called, isSelectingStartStore:', isSelectingStartStore);
+
+            // If we're in store selection mode, don't re-render (markers already have pulse effect)
+            if (isSelectingStartStore) {
+                console.log('Skipping render: in store selection mode');
+                return;
+            }
+
+            // Clear ALL existing markers including prefecture/city level markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+            gymMarkers = [];
+
+            console.log('Cleared storeMarkers and gymMarkers arrays');
+
+            // Also clear any remaining layers except search marker and circle
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker) {
+                    if (layer !== searchMarker) {
+                        map.removeLayer(layer);
+                    }
+                }
+                // Check for marker cluster groups if available
+                if (typeof L.MarkerClusterGroup !== 'undefined' && layer instanceof L.MarkerClusterGroup) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            console.log('Cleared all marker layers');
+
+            if (!searchCircle || !searchMarker) {
+                console.warn('searchCircle or searchMarker is null!');
+                return;
+            }
+
+            const centerLatLng = searchMarker.getLatLng();
+            const filters = getFilters();
+            const storesInRadius = [];
+
+            // Collect stores within radius
+            allStores.forEach(store => {
+                if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                if (store.brand === 'Lawson' && !filters.showLawson) return;
+                if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                const storeLatLng = L.latLng(store.latitude, store.longitude);
+                const distance = centerLatLng.distanceTo(storeLatLng);
+
+                if (distance <= currentRadiusMeters) {
+                    storesInRadius.push(store);
+                }
+            });
+
+            console.log('Found', storesInRadius.length, 'stores in radius');
+
+            // Add markers for stores in radius
+            storesInRadius.forEach(store => {
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
+                const icon = L.divIcon({
+                    className: 'marker-icon',
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}">${brandIcon}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <div class="popup-title">${brandIcon} ${store.brand}</div>
+                            <div class="popup-info">
+                                <div><strong>${store.name || '未知'}</strong></div>
+                            </div>
+                        </div>
+                    `);
+
+                // Store reference for later selection
+                marker.storeData = store;
+
+                // Add click handler for start point selection
+                marker.on('click', function() {
+                    handleStoreMarkerClick(marker, store);
+                });
+
+                // Add to storeMarkers array to keep track
+                storeMarkers.push(marker);
+            });
+
+            console.log('Added', storeMarkers.length, 'markers to map');
+        }
+
+        function updateRadiusCount() {
+            if (!searchCircle) return;
+
+            const center = searchCircle.getLatLng();
+            const filters = getFilters();
+
+            let storesInRadius = 0;
+            let gymsInRadius = 0;
+            let brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+
+            // Count stores
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    // Apply brand filters
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                    const distance = center.distanceTo(L.latLng(store.latitude, store.longitude));
+                    if (distance <= currentRadiusMeters) {
+                        storesInRadius++;
+                        if (brandCounts[store.brand] !== undefined) {
+                            brandCounts[store.brand]++;
+                        }
+                    }
+                });
+            }
+
+            // Count gyms
+            if (filters.showGyms) {
+                let pokemonCenterCount = 0;
+                let cardShopCount = 0;
+
+                allGyms.forEach(gym => {
+                    const isPokemonCenter = gym.official === true || gym.type === "Pokemon Center";
+                    const isCardShop = !isPokemonCenter;
+
+                    if (isPokemonCenter && !filters.showPokemonCenter) return;
+                    if (isCardShop && !filters.showCardShop) return;
+
+                    const distance = center.distanceTo(L.latLng(gym.latitude, gym.longitude));
+                    if (distance <= currentRadiusMeters) {
+                        gymsInRadius++;
+                        if (isPokemonCenter) {
+                            pokemonCenterCount++;
+                        } else {
+                            cardShopCount++;
+                        }
+                    }
+                });
+
+                // Store counts for UI
+                window.pokemonCenterCount = pokemonCenterCount;
+                window.cardShopCount = cardShopCount;
+            }
+
+            // Update UI
+            const total = storesInRadius + gymsInRadius;
+            document.getElementById('radiusCount').textContent = `${total} 間`;
+
+            let detailsHtml = `便利店: ${storesInRadius} 間`;
+            if (storesInRadius > 0) {
+                detailsHtml += `<br>`;
+                if (filters.show7Eleven) detailsHtml += `🟢 7-Eleven: ${brandCounts['7-Eleven']} `;
+                if (filters.showLawson) detailsHtml += `🔵 Lawson: ${brandCounts['Lawson']} `;
+                if (filters.showFamilyMart) detailsHtml += `🟡 FamilyMart: ${brandCounts['FamilyMart']}`;
+            }
+
+            if (gymsInRadius > 0) {
+                detailsHtml += `<br><br>寶可夢店: ${gymsInRadius} 間<br>`;
+                if (filters.showPokemonCenter && window.pokemonCenterCount > 0) {
+                    detailsHtml += `⭐ 寶可夢中心: ${window.pokemonCenterCount} `;
+                }
+                if (filters.showCardShop && window.cardShopCount > 0) {
+                    detailsHtml += `🏪 卡牌店: ${window.cardShopCount}`;
+                }
+            }
+
+            document.getElementById('radiusDetails').innerHTML = detailsHtml;
+
+            // Add Google Maps button for radius search mode
+            document.getElementById('radiusButtons').innerHTML = `
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button onclick="openRadiusRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                    <button onclick="clearSearchArea()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
+                </div>
+            `;
+
+            document.getElementById('radiusInfo').classList.add('show');
+        }
+
+        function clearRadius() {
+            if (searchMarker) {
+                map.removeLayer(searchMarker);
+                searchMarker = null;
+            }
+            if (searchCircle) {
+                map.removeLayer(searchCircle);
+                searchCircle = null;
+            }
+            document.getElementById('radiusInfo').classList.remove('show');
+
+            // Reset view-mode flags so the zoomend handler resumes rendering the
+            // prefecture / city / store views normally after clearing radius mode.
+            areaDetailMode = false;
+            currentAreaStores = [];
+
+            // Restore all markers
+            renderMarkers();
+        }
+
+        // Global function for cancel button
+        function clearSearchArea() {
+            clearRadius();
+            // Exit search mode if active
+            if (searchMode) {
+                toggleSearchMode();
+            }
+            // Clear optimal route if exists
+            if (window.radiusOptimalRoute) {
+                map.removeLayer(window.radiusOptimalRoute);
+                window.radiusOptimalRoute = null;
+            }
+            if (window.radiusRouteMarkers) {
+                window.radiusRouteMarkers.forEach(m => map.removeLayer(m));
+                window.radiusRouteMarkers = [];
+            }
+        }
+        window.clearSearchArea = clearSearchArea;
+
+        // Open optimal route in Google Maps for radius search
+        function openRadiusRouteInGoogleMaps() {
+            if (!searchCircle || !searchMarker) {
+                showCustomAlert('錯誤', '請先設定搜尋範圍。');
+                return;
+            }
+
+            const centerLatLng = searchMarker.getLatLng();
+            const filters = getFilters();
+            const allStoresInRadius = [];
+
+            // Collect all stores within radius. Use a bbox reject + flat-earth
+            // distance (fast) instead of building a LatLng + distanceTo() per store.
+            const _cLat = centerLatLng.lat, _cLng = centerLatLng.lng;
+            const _LAT_M = 111000, _LNG_M = 111000 * Math.cos(_cLat * Math.PI / 180);
+            const _padLat = currentRadiusMeters / _LAT_M, _padLng = currentRadiusMeters / _LNG_M;
+            const _rSq = currentRadiusMeters * currentRadiusMeters;
+            allStores.forEach(store => {
+                if (Math.abs(store.latitude - _cLat) > _padLat ||
+                    Math.abs(store.longitude - _cLng) > _padLng) return;
+                const dLat = (store.latitude - _cLat) * _LAT_M;
+                const dLng = (store.longitude - _cLng) * _LNG_M;
+                if (dLat * dLat + dLng * dLng <= _rSq) {
+                    allStoresInRadius.push({
+                        ...store,
+                        latlng: L.latLng(store.latitude, store.longitude)
+                    });
+                }
+            });
+
+            if (allStoresInRadius.length === 0) {
+                showCustomAlert('冇結果', '搜尋範圍內搵唔到店舖。');
+                return;
+            }
+
+            // Count by brand
+            const brandCounts = {
+                '7-Eleven': allStoresInRadius.filter(s => s.brand === '7-Eleven').length,
+                'Lawson': allStoresInRadius.filter(s => s.brand === 'Lawson').length,
+                'FamilyMart': allStoresInRadius.filter(s => s.brand === 'FamilyMart').length
+            };
+
+            // Step 1: Ask for brand preference
+            let brandSelectionHtml = `
+                <div style="text-align: left;">
+                    <p style="margin-bottom: 12px; font-size: 13px;">揀你想去嘅便利店品牌：</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_7eleven" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟢 7-Eleven (${brandCounts['7-Eleven']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_lawson" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🔵 Lawson (${brandCounts['Lawson']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_familymart" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟡 FamilyMart (${brandCounts['FamilyMart']})</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+
+            showCustomConfirm('揀品牌', brandSelectionHtml,
+                () => {
+                    // Get selected brands
+                    const include7Eleven = document.getElementById('route_7eleven').checked;
+                    const includeLawson = document.getElementById('route_lawson').checked;
+                    const includeFamilyMart = document.getElementById('route_familymart').checked;
+
+                    if (!include7Eleven && !includeLawson && !includeFamilyMart) {
+                        showCustomAlert('錯誤', '請至少揀一個品牌。');
+                        return;
+                    }
+
+                    // Filter stores by selected brands
+                    const storesInRadius = allStoresInRadius.filter(store => {
+                        if (store.brand === '7-Eleven' && !include7Eleven) return false;
+                        if (store.brand === 'Lawson' && !includeLawson) return false;
+                        if (store.brand === 'FamilyMart' && !includeFamilyMart) return false;
+                        return true;
+                    });
+
+                    if (storesInRadius.length === 0) {
+                        showCustomAlert('冇結果', '搵唔到你揀嘅品牌嘅店舖。');
+                        return;
+                    }
+
+                    // Step 2: Directly enter map selection mode (skip dialog)
+                    directMapSelection(storesInRadius, centerLatLng, allStoresInRadius);
+                },
+                null
+            );
+        }
+
+        // Direct map selection for starting store
+        let startStoreSelectionMode = false;
+        let tempStoresForSelection = null;
+        let tempCenterForSelection = null;
+        let isSelectingStartStore = false; // Global flag to prevent marker clearing during selection
+
+        function directMapSelection(storesInRadius, centerLatLng, allStoresInRadius) {
+            // Set flag FIRST to prevent any clears
+            isSelectingStartStore = true;
+
+            // Store for later use
+            tempStoresForSelection = { storesInRadius, allStoresInRadius };
+            tempCenterForSelection = centerLatLng;
+            startStoreSelectionMode = true;
+
+            console.log('directMapSelection called, searchCircle:', searchCircle);
+            console.log('storesInRadius count:', storesInRadius.length);
+            console.log('allStoresInRadius count:', allStoresInRadius.length);
+            console.log('isSelectingStartStore set to:', isSelectingStartStore);
+
+            // Re-render ALL stores with visual distinction for preferred brands
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+
+            const preferredIds = new Set(storesInRadius.map(s => s.id));
+
+            allStoresInRadius.forEach(store => {
+                const isPreferred = preferredIds.has(store.id);
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
+
+                const icon = L.divIcon({
+                    className: 'marker-icon',
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <div class="popup-title">${brandIcon} ${store.brand}${isPreferred ? '' : '（其他品牌）'}</div>
+                            <div class="popup-info">
+                                <div><strong>${store.name || ''}</strong></div>
+                            </div>
+                        </div>
+                    `);
+
+                marker.storeData = store;
+                marker.on('click', function() {
+                    handleStoreMarkerClick(marker, store);
+                });
+
+                storeMarkers.push(marker);
+            });
+
+            console.log('Rendered', storeMarkers.length, 'markers (', storesInRadius.length, 'preferred +', (allStoresInRadius.length - storesInRadius.length), 'others)');
+
+            // Show a simple message at the top
+            const message = document.createElement('div');
+            message.id = 'selection-message';
+            message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點<br><small style="font-size: 12px; opacity: 0.9;">※ 光亮圖示＝你揀嘅品牌 / 淺色圖示＝其他品牌（不足 10 間時補上）</small>';
+            document.body.appendChild(message);
+
+            console.log('Selection mode activated - all stores rendered');
+
+            // Remove message after 7 seconds (longer since we have more text)
+            setTimeout(() => {
+                const msg = document.getElementById('selection-message');
+                if (msg) {
+                    msg.style.animation = 'fadeOut 0.3s';
+                    setTimeout(() => msg.remove(), 300);
+                }
+            }, 7000);
+        }
+
+        // Render stores for route selection mode
+        function renderStoresForRouteSelection(storesInRoute, allStoresInRoute) {
+            console.log('renderStoresForRouteSelection called, preferred stores:', storesInRoute.length, 'all stores:', allStoresInRoute ? allStoresInRoute.length : 0);
+
+            // Clear existing store markers (but keep route markers)
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+
+            const preferredIds = new Set(storesInRoute.map(s => s.id));
+            const storesToRender = allStoresInRoute && allStoresInRoute.length > 0 ? allStoresInRoute : storesInRoute;
+
+            // Add markers for all stores in route
+            storesToRender.forEach(store => {
+                const isPreferred = preferredIds.has(store.id);
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
+                const icon = L.divIcon({
+                    className: 'marker-icon',
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <div class="popup-title">${brandIcon} ${store.brand}${isPreferred ? '' : '（其他品牌）'}</div>
+                            <div class="popup-info">
+                                <div><strong>${store.name || ''}</strong></div>
+                            </div>
+                        </div>
+                    `);
+
+                // Store reference for later selection
+                marker.storeData = store;
+
+                // Add click handler for start point selection
+                marker.on('click', function() {
+                    handleStoreMarkerClick(marker, store);
+                });
+
+                // Add to storeMarkers array to keep track
+                storeMarkers.push(marker);
+            });
+
+            console.log('Added', storeMarkers.length, 'markers to map for route selection');
+        }
+
+        // Direct map selection for route planning mode (with start and end points)
+        function directMapSelectionForRoute(storesInRoute, startPoint, endPoint, allStoresInRoute) {
+            // Set flag FIRST to prevent any clears
+            isSelectingStartStore = true;
+
+            // Store for later use
+            tempStoresForSelection = { storesInRoute, allStoresInRoute, startPoint, endPoint };
+            startStoreSelectionMode = true;
+
+            console.log('directMapSelectionForRoute called');
+            console.log('storesInRoute count:', storesInRoute.length);
+            console.log('isSelectingStartStore set to:', isSelectingStartStore);
+
+            // Show a simple message at the top - NO dialog, NO marker modification
+            const message = document.createElement('div');
+            message.id = 'selection-message';
+            message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點';
+            document.body.appendChild(message);
+
+            console.log('Selection mode activated for route - markers unchanged');
+
+            // Remove message after 5 seconds
+            setTimeout(() => {
+                const msg = document.getElementById('selection-message');
+                if (msg) {
+                    msg.style.animation = 'fadeOut 0.3s';
+                    setTimeout(() => msg.remove(), 300);
+                }
+            }, 5000);
+        }
+
+        // Legacy function (kept for compatibility)
+        function askForStartingStoreWithMapSelection(storesInRadius, centerLatLng, allStoresInRadius) {
+            directMapSelection(storesInRadius, centerLatLng, allStoresInRadius);
+        }
+
+        // Ask user to select starting store
+        function askForStartingStore(storesInRadius, centerLatLng, allStoresInRadius) {
+            // Sort stores: prioritize selected brands, then by distance
+            const sortedStores = storesInRadius.sort((a, b) => {
+                const distA = centerLatLng.distanceTo(a.latlng);
+                const distB = centerLatLng.distanceTo(b.latlng);
+                return distA - distB;
+            });
+
+            // If less than 10 stores from selected brands, fill with other brands
+            let topStores = [...sortedStores];
+
+            if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
+                console.log('Filling stores: current count =', topStores.length, ', total available =', allStoresInRadius.length);
+
+                // Sort all stores by distance
+                const allSorted = [...allStoresInRadius].sort((a, b) => {
+                    const distA = centerLatLng.distanceTo(a.latlng);
+                    const distB = centerLatLng.distanceTo(b.latlng);
+                    return distA - distB;
+                });
+
+                // Fill up to 10 stores
+                const existingIds = new Set(topStores.map(s => s.id));
+                for (const store of allSorted) {
+                    if (topStores.length >= 10) break;
+                    if (!existingIds.has(store.id)) {
+                        topStores.push(store);
+                        existingIds.add(store.id);
+                        console.log('Added fill store:', store.brand, store.name);
+                    }
+                }
+
+                console.log('Final store count:', topStores.length);
+            }
+
+            // Limit to 10
+            topStores = topStores.slice(0, 10);
+
+            let storeListHtml = `
+                <div style="text-align: left; margin: 16px 0;">
+                    <p style="margin-bottom: 12px; font-weight: bold; font-size: 15px;">請揀起點：</p>
+                    <div style="max-height: 350px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px;">
+            `;
+
+            topStores.forEach((store, idx) => {
+                const distance = (centerLatLng.distanceTo(store.latlng) / 1000).toFixed(2);
+                const brandIcon = store.brand === '7-Eleven' ? '🟢' :
+                                 store.brand === 'Lawson' ? '🔵' : '🟡';
+
+                // Check if this store is from selected brands
+                const isPreferred = idx < storesInRadius.length;
+                const bgColor = idx % 2 === 0 ? '#f9f9f9' : '#ffffff';
+                const borderStyle = isPreferred ? '' : 'border-left: 3px solid #ff9800;';
+
+                storeListHtml += `
+                    <label style="display: flex; align-items: center; padding: 8px; background: ${bgColor}; border-radius: 6px; cursor: pointer; margin-bottom: 4px; transition: background 0.2s; ${borderStyle}" onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='${bgColor}'">
+                        <input type="radio" name="start_store" value="${idx}" ${idx === 0 ? 'checked' : ''} style="width: 18px; height: 18px; margin-right: 10px; flex-shrink: 0;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: bold; font-size: 13px;">${brandIcon} ${store.brand}${!isPreferred ? '（其他品牌）' : ''}</div>
+                            <div style="font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${store.name || '未知'}</div>
+                            <div style="font-size: 10px; color: #999;">距離: ${distance} km</div>
+                        </div>
+                    </label>
+                `;
+            });
+
+            storeListHtml += `
+                    </div>
+                    <div style="margin-top: 12px; padding: 8px; background: #e3f2fd; border-radius: 6px; font-size: 11px; color: #1976d2;">
+                        💡 優先品牌: ${storesInRadius.length} 間、全部: ${topStores.length} 間
+                        ${topStores.length > storesInRadius.length ? '<br>🔶 橙色框 = 其他品牌補充' : ''}
+                    </div>
+                    <div style="margin-top: 12px; text-align: center;">
+                        <button id="mapSelectionBtn" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;">
+                            🗺️ 喺地圖上揀
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            showCustomConfirm('揀起點', storeListHtml,
+                function() {
+                    console.log('Start store selection confirmed');
+                    const selectedRadio = document.querySelector('input[name="start_store"]:checked');
+                    console.log('Selected radio:', selectedRadio);
+                    const startIdx = selectedRadio ? parseInt(selectedRadio.value) : 0;
+                    console.log('Start index:', startIdx);
+                    const startStore = topStores[startIdx];
+                    console.log('Start store:', startStore);
+
+                    // Calculate optimal route from selected starting store
+                    // Use all stores (including filled ones) for the route
+                    calculateAndShowRoute(topStores, startStore.latlng, centerLatLng);
+                },
+                function() {
+                    // Cancel - do nothing
+                    startStoreSelectionMode = false;
+                }
+            );
+
+            // Add event listener for map selection button
+            setTimeout(() => {
+                const mapSelectionBtn = document.getElementById('mapSelectionBtn');
+                if (mapSelectionBtn) {
+                    mapSelectionBtn.addEventListener('click', function() {
+                        // Close dialog and enable map selection mode
+                        document.getElementById('customDialog').style.display = 'none';
+                        startStoreSelectionMode = true;
+
+                        // Highlight all store markers for selection
+                        map.eachLayer(function(layer) {
+                            if (layer instanceof L.Marker && layer.storeData) {
+                                // Add pulsing effect to store markers
+                                const element = layer.getElement();
+                                if (element) {
+                                    element.style.animation = 'pulse 1s infinite';
+                                    element.style.cursor = 'pointer';
+                                }
+                            }
+                        });
+
+                        showCustomAlert('揀店舖模式', '㩒地圖上嘅店舖圖示嚟揀起點。');
+                    });
+                }
+            }, 100);
+        }
+
+        // Handle store marker click for start point selection
+        function handleStoreMarkerClick(marker, store) {
+            if (startStoreSelectionMode) {
+                startStoreSelectionMode = false;
+                isSelectingStartStore = false; // Clear flag
+
+                // Remove pulsing effect from all markers
+                map.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker && layer.storeData) {
+                        const element = layer.getElement();
+                        if (element) {
+                            element.style.animation = '';
+                        }
+                    }
+                });
+
+                // Remove selection message
+                const msg = document.getElementById('selection-message');
+                if (msg) msg.remove();
+
+                // Check which mode this is
+                if (tempStoresForSelection && tempStoresForSelection.startPoint && tempStoresForSelection.endPoint) {
+                    // Route mode
+                    const { storesInRoute, startPoint, endPoint } = tempStoresForSelection;
+                    calculateAndShowRouteForNav(store, storesInRoute, startPoint, endPoint);
+                } else if (tempStoresForSelection && tempStoresForSelection.clusterCenter) {
+                    // Area mode
+                    const { storesInCluster, clusterCenter, clusterIdx } = tempStoresForSelection;
+                    calculateAndShowRouteForArea(store, storesInCluster, clusterCenter, clusterIdx);
+                } else if (tempStoresForSelection && tempCenterForSelection) {
+                    // Radius mode
+                    const { storesInRadius, allStoresInRadius } = tempStoresForSelection;
+
+                    // Build full store list (including filled ones)
+                    const sortedStores = storesInRadius.sort((a, b) => {
+                        const distA = tempCenterForSelection.distanceTo(a.latlng);
+                        const distB = tempCenterForSelection.distanceTo(b.latlng);
+                        return distA - distB;
+                    });
+
+                    let topStores = [...sortedStores];
+
+                    if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
+                        const allSorted = [...allStoresInRadius].sort((a, b) => {
+                            const distA = tempCenterForSelection.distanceTo(a.latlng);
+                            const distB = tempCenterForSelection.distanceTo(b.latlng);
+                            return distA - distB;
+                        });
+
+                        const existingIds = new Set(topStores.map(s => s.id));
+                        for (const s of allSorted) {
+                            if (topStores.length >= 10) break;
+                            if (!existingIds.has(s.id)) {
+                                topStores.push(s);
+                                existingIds.add(s.id);
+                            }
+                        }
+                    }
+
+                    topStores = topStores.slice(0, 10);
+
+                    // Calculate route with selected store as start
+                    calculateAndShowRoute(topStores, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
+                }
+            }
+        }
+
+        // Calculate optimal route and open in Google Maps
+        // Calculate optimal route and open in Google Maps
+        function calculateAndShowRoute(storesInRadius, startPos, originalCenter) {
+            // Exclude the chosen start store from the waypoint list so it stays the
+            // ORIGIN only (otherwise TSP picks it as the nearest point at distance 0
+            // and it becomes waypoint #1, shifting the real start in Google Maps).
+            const routeStores = storesInRadius.filter(s => {
+                const d = startPos.distanceTo(s.latlng);
+                return d > 5; // >5m apart => not the start store itself
+            });
+
+            // Calculate optimal route using Nearest Neighbor TSP starting from selected store
+            const orderedStores = [];
+            const visited = new Set();
+            let currentPos = startPos;
+
+            while (orderedStores.length < routeStores.length) {
+                let nearestIdx = -1;
+                let minDist = Infinity;
+
+                for (let i = 0; i < routeStores.length; i++) {
+                    if (visited.has(i)) continue;
+
+                    const dist = currentPos.distanceTo(routeStores[i].latlng);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                if (nearestIdx !== -1) {
+                    visited.add(nearestIdx);
+                    orderedStores.push(routeStores[nearestIdx]);
+                    currentPos = routeStores[nearestIdx].latlng;
+                }
+            }
+
+            // Calculate total distance
+            let totalDist = 0;
+            const routeCoords = [startPos, ...orderedStores.map(s => s.latlng), startPos];
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                totalDist += routeCoords[i].distanceTo(routeCoords[i + 1]);
+            }
+
+            // Coord precision trimmed to 6 decimals (~0.1m) for Google Maps stability.
+            const coord = (lat, lng) => `${(+lat).toFixed(6)},${(+lng).toFixed(6)}`;
+
+            // origin = chosen start store; destination = LAST store on the TSP path
+            // (origin==destination makes routes flaky). Middle stores = waypoints (max 9).
+            const startCoord = coord(startPos.lat, startPos.lng);
+            let origin = startCoord;
+            let destination = startCoord;
+            let routeForGoogleMaps = [];
+
+            if (orderedStores.length > 0) {
+                const last = orderedStores[orderedStores.length - 1];
+                destination = coord(last.latlng.lat, last.latlng.lng);
+                const middle = orderedStores.slice(0, -1);
+                routeForGoogleMaps = middle.length > 9 ? middle.slice(0, 9) : middle;
+            }
+
+            let waypoints = '';
+            if (routeForGoogleMaps.length > 0) {
+                const waypointCoords = routeForGoogleMaps.map(store =>
+                    coord(store.latlng.lat, store.latlng.lng)
+                );
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
+            }
+
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
+            console.log('🗺️ [Radius] Nav URL:', googleMapsUrl);
+
+            // Show confirmation with route details
+            const totalStops = 1 + orderedStores.length; // start store + visited stores
+            const storeList = orderedStores.slice(0, 5).map((store, idx) =>
+                `${idx + 1}. ${store.brand} - ${store.name || ''}`
+            ).join('\n');
+
+            const walkTime = Math.ceil(totalDist / 80); // 80m/min walking speed
+            let message = `已經整好最佳路線！\n\n`;
+            message += `到訪店舖數: ${totalStops} 間\n`;
+            message += `總距離: ${(totalDist / 1000).toFixed(1)} km\n`;
+            message += `預計需時: 約 ${walkTime} 分鐘（步行）\n\n`;
+            message += `頭 5 間店舖:\n${storeList}`;
+
+            if (totalStops > 10) {
+                message += `\n\n※ Google Maps 最多支援 9 個途經點\n只會顯示頭幾間店舖嘅路線`;
+            }
+            message += `\n\n用 Google Maps 開啟？`;
+
+            showCustomConfirm('確認路線', message,
+                () => {
+                    const newWindow = window.open(googleMapsUrl, '_blank');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                        const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
+                        showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
+                    }
+                },
+                null
+            );
+        }
+
+        // Calculate and show route for route planning mode navigation
+        function calculateAndShowRouteForNav(startStore, storesInRoute, startPoint, endPoint) {
+            console.log('calculateAndShowRouteForNav called');
+            console.log('Start store:', startStore && startStore.brand, startStore && startStore.name, startStore && startStore.latitude, startStore && startStore.longitude);
+            console.log('Total stores in route:', storesInRoute.length);
+
+            // Helper: always derive a LatLng from lat/lng fields (some store objects
+            // don't carry a .latlng property, which used to crash distanceTo()).
+            const asLatLng = (s) => L.latLng(s.latitude, s.longitude);
+
+            // Remove start store from list if present
+            const otherStores = storesInRoute.filter(s => s.id !== startStore.id);
+
+            // Use Nearest Neighbor TSP starting from selected store
+            const orderedStores = [];
+            const visited = new Set();
+            let currentPos = asLatLng(startStore);
+
+            while (orderedStores.length < otherStores.length) {
+                let nearestIdx = -1;
+                let minDist = Infinity;
+
+                for (let i = 0; i < otherStores.length; i++) {
+                    if (visited.has(i)) continue;
+
+                    const dist = currentPos.distanceTo(asLatLng(otherStores[i]));
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                if (nearestIdx !== -1) {
+                    visited.add(nearestIdx);
+                    orderedStores.push(otherStores[nearestIdx]);
+                    currentPos = asLatLng(otherStores[nearestIdx]);
+                }
+            }
+
+            // Calculate total distance (origin = start store, then TSP order, then end point)
+            let totalDist = 0;
+            const routeCoords = [asLatLng(startStore), ...orderedStores.map(asLatLng), endPoint];
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                totalDist += routeCoords[i].distanceTo(routeCoords[i + 1]);
+            }
+
+            // Coord precision trimmed to 6 decimals (~0.1m) for Google Maps stability.
+            const coord = (lat, lng) => `${(+lat).toFixed(6)},${(+lng).toFixed(6)}`;
+
+            // The chosen start store IS the navigation origin (matches the UI text
+            // "スタート店舗"). The remaining stores are the waypoints in TSP order.
+            // Google Maps allows up to ~9 intermediate waypoints (origin+dest excluded).
+            const waypointStores = orderedStores.length > 9 ? orderedStores.slice(0, 9) : orderedStores;
+
+            // Build Google Maps URL
+            const origin = coord(startStore.latitude, startStore.longitude);
+            const destination = coord(endPoint.lat, endPoint.lng);
+
+            let waypoints = '';
+            if (waypointStores.length > 0) {
+                const waypointCoords = waypointStores.map(store =>
+                    coord(store.latitude, store.longitude)
+                );
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
+            }
+
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
+            console.log('🗺️ Nav URL (origin should be the chosen start store):', googleMapsUrl);
+            console.log('   origin =', origin, '| waypoints =', waypointStores.length, '| dest =', destination);
+
+            const totalStops = 1 + orderedStores.length; // start store + others
+            let message = `起點店舖: ${BRAND_ICONS[startStore.brand]} ${startStore.brand} ${startStore.name}\n\n`;
+            message += `到訪店舖數: ${totalStops} 間\n`;
+            message += `總距離: ${(totalDist / 1000).toFixed(2)} km`;
+
+            if (totalStops > 10) {
+                message += `\n\n※ Google Maps 最多支援 10 個途經點\n只會顯示頭 10 間店舖嘅路線`;
+            }
+            message += `\n\n用 Google Maps 開啟？`;
+
+            showCustomConfirm('確認路線', message,
+                () => {
+                    const newWindow = window.open(googleMapsUrl, '_blank');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                        const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
+                        showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
+                    }
+                },
+                null
+            );
+        }
+
+        // Calculate and show route for area mode
+        function calculateAndShowRouteForArea(startStore, storesInCluster, clusterCenter, clusterIdx) {
+            console.log('calculateAndShowRouteForArea called');
+            console.log('Start store:', startStore.brand, startStore.name);
+            console.log('Total stores in cluster:', storesInCluster.length);
+
+            // Remove start store from list if present
+            const otherStores = storesInCluster.filter(s => s.id !== startStore.id);
+
+            // Use Nearest Neighbor TSP starting from selected store
+            const orderedStores = [];
+            const visited = new Set();
+            let currentPos = L.latLng(startStore.latitude, startStore.longitude);
+
+            while (orderedStores.length < otherStores.length) {
+                let nearestIdx = -1;
+                let minDist = Infinity;
+
+                for (let i = 0; i < otherStores.length; i++) {
+                    if (visited.has(i)) continue;
+
+                    const dist = currentPos.distanceTo(L.latLng(otherStores[i].latitude, otherStores[i].longitude));
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                if (nearestIdx !== -1) {
+                    visited.add(nearestIdx);
+                    orderedStores.push(otherStores[nearestIdx]);
+                    currentPos = L.latLng(otherStores[nearestIdx].latitude, otherStores[nearestIdx].longitude);
+                }
+            }
+
+            // Calculate total distance (round trip starting and ending at start store)
+            let totalDist = 0;
+            const startStoreLatLng = L.latLng(startStore.latitude, startStore.longitude);
+            let prevPos = startStoreLatLng;
+
+            orderedStores.forEach(store => {
+                const storePos = L.latLng(store.latitude, store.longitude);
+                totalDist += prevPos.distanceTo(storePos);
+                prevPos = storePos;
+            });
+
+            totalDist += prevPos.distanceTo(startStoreLatLng); // Last store back to start store
+
+            // Google Maps free URL allows up to 9 intermediate waypoints (origin+dest
+            // excluded). Coord precision is trimmed to 6 decimals (~0.1m): higher
+            // precision sometimes makes Google Maps snap to the wrong road / act flaky.
+            const coord = (lat, lng) => `${(+lat).toFixed(6)},${(+lng).toFixed(6)}`;
+
+            // origin = chosen start store. destination = LAST store on the TSP path
+            // (NOT the start store again — origin==destination makes the route flaky).
+            // The remaining stores in between become the waypoints.
+            const startCoord = coord(startStore.latitude, startStore.longitude);
+            let origin = startCoord;
+            let destination = startCoord;
+            let waypointStores = [];
+
+            if (orderedStores.length === 0) {
+                // only the start store — no route, just center on it
+                destination = startCoord;
+            } else {
+                destination = coord(orderedStores[orderedStores.length - 1].latitude,
+                                    orderedStores[orderedStores.length - 1].longitude);
+                const middle = orderedStores.slice(0, -1); // everything except the last
+                waypointStores = middle.length > 9 ? middle.slice(0, 9) : middle;
+            }
+
+            let waypoints = '';
+            if (waypointStores.length > 0) {
+                const waypointCoords = waypointStores.map(s => coord(s.latitude, s.longitude));
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
+            }
+
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
+            console.log('🗺️ [Area] Nav URL — origin should be chosen start store:', googleMapsUrl);
+            console.log('   origin =', origin, '| waypoints =', waypointStores.length, '| dest =', destination);
+
+            const isHighest = clusterIdx === window.maxClusterIdx;
+            const totalStops = 1 + orderedStores.length;
+            let message = `${isHighest ? '⭐ ' : ''}起點店舖: ${BRAND_ICONS[startStore.brand]} ${startStore.brand} ${startStore.name}\n\n`;
+            message += `到訪店舖數: ${totalStops} 間\n`;
+            message += `總距離: ${(totalDist / 1000).toFixed(2)} km`;
+
+            if (totalStops > 10) {
+                message += `\n\n※ Google Maps 最多支援 10 個途經點\n只會顯示頭 10 間店舖嘅路線`;
+            }
+            message += `\n\n用 Google Maps 開啟？`;
+
+            showCustomConfirm('確認路線', message,
+                () => {
+                    const newWindow = window.open(googleMapsUrl, '_blank');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                        const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
+                        showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
+                    }
+                },
+                null
+            );
+        }
+
+        // Shared, FAST route-buffer tester. Precomputes route sample points + a
+        // bounding box ONCE, then tests each store with a bbox reject + flat-earth
+        // distance (no per-store Leaflet.distanceTo trig). ~10x faster over 15k stores.
+        // Returns a function (lat,lng) -> boolean.
+        function makeRouteBufferTester(pts, bufferRadius) {
+            const LAT_M = 111000;
+            const LNG_M = 111000 * Math.cos(pts[0].lat * Math.PI / 180);
+            const samples = [];
+            for (let i = 0; i < pts.length - 1; i++) {
+                const p1 = pts[i], p2 = pts[i + 1];
+                const segM = p1.distanceTo(p2);
+                const steps = Math.max(1, Math.ceil(segM / 500));
+                for (let j = 0; j <= steps; j++) {
+                    const f = j / steps;
+                    samples.push([p1.lat + (p2.lat - p1.lat) * f,
+                                  p1.lng + (p2.lng - p1.lng) * f]);
+                }
+            }
+            let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+            for (const [la, ln] of samples) {
+                if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+                if (ln < minLng) minLng = ln; if (ln > maxLng) maxLng = ln;
+            }
+            const padLat = bufferRadius / LAT_M, padLng = bufferRadius / LNG_M;
+            minLat -= padLat; maxLat += padLat; minLng -= padLng; maxLng += padLng;
+            const bufSq = bufferRadius * bufferRadius;
+            return function (lat, lng) {
+                if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) return false;
+                for (let k = 0; k < samples.length; k++) {
+                    const dLat = (lat - samples[k][0]) * LAT_M;
+                    const dLng = (lng - samples[k][1]) * LNG_M;
+                    if (dLat * dLat + dLng * dLng <= bufSq) return true;
+                }
+                return false;
+            };
+        }
+
+        // Helper function for custom confirm dialog
+        window.openRadiusRouteInGoogleMaps = openRadiusRouteInGoogleMaps;
+
+        // Open route in Google Maps for route planning mode
+        function openRouteInGoogleMaps() {
+            if (routePoints.length < 2) {
+                showCustomAlert('錯誤', '未設定路線。');
+                return;
+            }
+
+            const filters = getFilters();
+            const allStoresInRoute = [];
+
+            // --- Performance: precompute route sample points ONCE (not per store),
+            //     and use a flat-earth distance approximation instead of Leaflet's
+            //     trig-heavy distanceTo(). At Japan's latitude this is accurate enough
+            //     for a buffer test and is ~10x faster over 15k+ stores. ---
+            const bufferRadius = currentRadiusMeters;
+            const LAT_M = 111000;                    // metres per degree latitude
+            const midLat = routePoints[0].lat * Math.PI / 180;
+            const LNG_M = 111000 * Math.cos(midLat); // metres per degree longitude
+
+            // Sampled points along the whole route (every ~500m)
+            const samples = [];
+            for (let i = 0; i < routePoints.length - 1; i++) {
+                const p1 = routePoints[i], p2 = routePoints[i + 1];
+                const segM = p1.distanceTo(p2);
+                const steps = Math.max(1, Math.ceil(segM / 500));
+                for (let j = 0; j <= steps; j++) {
+                    const f = j / steps;
+                    samples.push([p1.lat + (p2.lat - p1.lat) * f,
+                                  p1.lng + (p2.lng - p1.lng) * f]);
+                }
+            }
+            // Bounding box of the route + buffer, for a cheap first-pass reject
+            let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+            for (const [la, ln] of samples) {
+                if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+                if (ln < minLng) minLng = ln; if (ln > maxLng) maxLng = ln;
+            }
+            const padLat = bufferRadius / LAT_M, padLng = bufferRadius / LNG_M;
+            minLat -= padLat; maxLat += padLat; minLng -= padLng; maxLng += padLng;
+            const bufSq = bufferRadius * bufferRadius;
+
+            function isInRouteBuffer(lat, lng) {
+                // cheap bbox reject first
+                if (lat < minLat || lat > maxLat || lng < minLng || lng > maxLng) return false;
+                for (let k = 0; k < samples.length; k++) {
+                    const dLat = (lat - samples[k][0]) * LAT_M;
+                    const dLng = (lng - samples[k][1]) * LNG_M;
+                    if (dLat * dLat + dLng * dLng <= bufSq) return true;
+                }
+                return false;
+            }
+
+            // Nearest distance (metres) from a point to the route, for ranking top-up
+            // stores by how conveniently they sit along the path.
+            function distToRoute(lat, lng) {
+                let best = Infinity;
+                for (let k = 0; k < samples.length; k++) {
+                    const dLat = (lat - samples[k][0]) * LAT_M;
+                    const dLng = (lng - samples[k][1]) * LNG_M;
+                    const d = dLat * dLat + dLng * dLng;
+                    if (d < best) best = d;
+                }
+                return Math.sqrt(best);
+            }
+
+            // Collect all stores within route buffer (without brand filter yet)
+            if (filters.showStores) {
+                allStores.forEach(store => {
+
+                    if (isInRouteBuffer(store.latitude, store.longitude)) {
+                        allStoresInRoute.push({
+                            ...store,
+                            latlng: L.latLng(store.latitude, store.longitude)
+                        });
+                    }
+                });
+            }
+
+            if (allStoresInRoute.length === 0) {
+                showCustomAlert('冇結果', '路線範圍內搵唔到店舖。');
+                return;
+            }
+
+            // Count stores by brand
+            const brandCounts = {
+                '7-Eleven': allStoresInRoute.filter(s => s.brand === '7-Eleven').length,
+                'Lawson': allStoresInRoute.filter(s => s.brand === 'Lawson').length,
+                'FamilyMart': allStoresInRoute.filter(s => s.brand === 'FamilyMart').length
+            };
+
+            // Step 1: Ask for brand preference
+            let brandSelectionHtml = `
+                <div style="text-align: left;">
+                    <p style="margin-bottom: 12px; font-size: 13px;">揀你想去嘅便利店品牌：</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_nav_7eleven" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟢 7-Eleven (${brandCounts['7-Eleven']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_nav_lawson" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🔵 Lawson (${brandCounts['Lawson']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="route_nav_familymart" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟡 FamilyMart (${brandCounts['FamilyMart']})</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+
+            showCustomConfirm(
+                '揀品牌',
+                brandSelectionHtml,
+                function() {
+                    // Get selected brands
+                    const include7Eleven = document.getElementById('route_nav_7eleven').checked;
+                    const includeLawson = document.getElementById('route_nav_lawson').checked;
+                    const includeFamilyMart = document.getElementById('route_nav_familymart').checked;
+
+                    if (!include7Eleven && !includeLawson && !includeFamilyMart) {
+                        showCustomAlert('錯誤', '請至少揀一個品牌。');
+                        return;
+                    }
+
+                    // Preferred-brand stores come first.
+                    const preferred = allStoresInRoute.filter(store => {
+                        if (store.brand === '7-Eleven' && !include7Eleven) return false;
+                        if (store.brand === 'Lawson' && !includeLawson) return false;
+                        if (store.brand === 'FamilyMart' && !includeFamilyMart) return false;
+                        return true;
+                    });
+
+                    if (preferred.length === 0) {
+                        showCustomAlert('冇結果', '搵唔到你揀嘅品牌嘅店舖。');
+                        return;
+                    }
+
+                    // If fewer than TARGET preferred stores are on the route, top up with
+                    // the nearest-to-route stores of OTHER brands so the trip still has
+                    // enough convenient stops. Preferred brands always keep priority.
+                    const TARGET = 10;
+                    let storesInRoute = [...preferred];
+                    console.log('🔹 偏好品牌店數:', preferred.length, '| buffer內全部店:', allStoresInRoute.length);
+                    if (storesInRoute.length < TARGET) {
+                        const chosen = new Set(preferred.map(s => s.id));
+                        // distance from each store to the nearest route sample point
+                        const others = allStoresInRoute
+                            .filter(s => !chosen.has(s.id))
+                            .map(s => ({ s, d: distToRoute(s.latitude, s.longitude) }))
+                            .sort((a, b) => a.d - b.d);
+                        console.log('🔹 可補足的其他品牌店數:', others.length);
+                        for (const o of others) {
+                            if (storesInRoute.length >= TARGET) break;
+                            storesInRoute.push(o.s);
+                        }
+                    }
+                    console.log('🔹 補足後總店數:', storesInRoute.length,
+                        '品牌分布:', storesInRoute.reduce((a,s)=>{a[s.brand]=(a[s.brand]||0)+1;return a;},{}));
+
+                    // Render stores on map before selection
+                    renderStoresForRouteSelection(storesInRoute, allStoresInRoute);
+
+                    // Step 2: Enter map selection mode for route planning
+                    directMapSelectionForRoute(storesInRoute, routePoints[0], routePoints[routePoints.length - 1], allStoresInRoute);
+                },
+                null
+            );
+        }
+        window.openRouteInGoogleMaps = openRouteInGoogleMaps;
+        window.openRouteInGoogleMaps = openRouteInGoogleMaps;
+
+        // Open area route in Google Maps for specific cluster
+        function openAreaRouteInGoogleMaps(clusterIdx) {
+            const cluster = window.routeClusters[clusterIdx];
+            if (!cluster || cluster.stores.length === 0) {
+                showCustomAlert('錯誤', '搵唔到區域資訊。');
+                return;
+            }
+
+            const allStoresInCluster = cluster.stores;
+
+            // Count stores by brand
+            const brandCounts = {
+                '7-Eleven': allStoresInCluster.filter(s => s.brand === '7-Eleven').length,
+                'Lawson': allStoresInCluster.filter(s => s.brand === 'Lawson').length,
+                'FamilyMart': allStoresInCluster.filter(s => s.brand === 'FamilyMart').length
+            };
+
+            // Step 1: Ask for brand preference
+            let brandSelectionHtml = `
+                <div style="text-align: left;">
+                    <p style="margin-bottom: 12px; font-size: 13px;">揀你想去嘅便利店品牌：</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="area_7eleven" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟢 7-Eleven (${brandCounts['7-Eleven']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="area_lawson" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🔵 Lawson (${brandCounts['Lawson']})</span>
+                        </label>
+                        <label style="display: flex; align-items: center; padding: 8px; background: #f5f5f5; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            <input type="checkbox" id="area_familymart" checked style="width: 18px; height: 18px; margin-right: 8px;">
+                            <span>🟡 FamilyMart (${brandCounts['FamilyMart']})</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+
+            showCustomConfirm(
+                '揀品牌',
+                brandSelectionHtml,
+                function() {
+                    // Get selected brands
+                    const include7Eleven = document.getElementById('area_7eleven').checked;
+                    const includeLawson = document.getElementById('area_lawson').checked;
+                    const includeFamilyMart = document.getElementById('area_familymart').checked;
+
+                    if (!include7Eleven && !includeLawson && !includeFamilyMart) {
+                        showCustomAlert('錯誤', '請至少揀一個品牌。');
+                        return;
+                    }
+
+                    // Preferred-brand stores first.
+                    const preferred = allStoresInCluster.filter(store => {
+                        if (store.brand === '7-Eleven' && !include7Eleven) return false;
+                        if (store.brand === 'Lawson' && !includeLawson) return false;
+                        if (store.brand === 'FamilyMart' && !includeFamilyMart) return false;
+                        return true;
+                    });
+
+                    if (preferred.length === 0) {
+                        showCustomAlert('冇結果', '搵唔到你揀嘅品牌嘅店舖。');
+                        return;
+                    }
+
+                    // Top up with nearest OTHER-brand stores (to the cluster centre)
+                    // if fewer than TARGET preferred stores, so the trip has enough
+                    // convenient stops. Preferred brands keep priority.
+                    const TARGET = 10;
+                    const c = cluster.center;
+                    const LATM = 111000, LNGM = 111000 * Math.cos(c.lat * Math.PI / 180);
+                    const dCenter = (s) => {
+                        const dl = (s.latitude - c.lat) * LATM, dn = (s.longitude - c.lng) * LNGM;
+                        return Math.sqrt(dl * dl + dn * dn);
+                    };
+                    let storesInCluster = [...preferred];
+                    if (storesInCluster.length < TARGET) {
+                        const chosen = new Set(preferred.map(s => s.id));
+                        const others = allStoresInCluster
+                            .filter(s => !chosen.has(s.id))
+                            .map(s => ({ s, d: dCenter(s) }))
+                            .sort((a, b) => a.d - b.d);
+                        for (const o of others) {
+                            if (storesInCluster.length >= TARGET) break;
+                            storesInCluster.push(o.s);
+                        }
+                    }
+                    console.log('🔹 [Area] 偏好:', preferred.length, '補足後:', storesInCluster.length,
+                        storesInCluster.reduce((a,s)=>{a[s.brand]=(a[s.brand]||0)+1;return a;},{}));
+
+                    // Render stores on map before selection
+                    renderStoresForAreaSelection(storesInCluster, allStoresInCluster);
+
+                    // Step 2: Enter map selection mode for area route
+                    directMapSelectionForArea(storesInCluster, cluster.center, clusterIdx, allStoresInCluster);
+                },
+                null
+            );
+        }
+        window.openAreaRouteInGoogleMaps = openAreaRouteInGoogleMaps;
+
+        // Rescan radius area for new stores
+        async function rescanRadiusArea() {
+            if (!searchCircle) {
+                showCustomAlert('錯誤', '未設定搜尋範圍。');
+                return;
+            }
+
+            const center = searchCircle.getLatLng();
+            const radius = searchCircle.getRadius();
+
+            showCustomAlert('開始掃描', `正在重新掃描半徑 ${(radius/1000).toFixed(1)}km 內嘅便利店...\n\n檢查有冇新店舖。`);
+
+            try {
+                const newStores = await scanAreaForStores(center.lat, center.lng, radius);
+
+                if (newStores.length > 0) {
+                    showCustomAlert('掃描完成', `搵到 ${newStores.length} 間新店舖！\n\n已經加咗上地圖。`);
+                    // Refresh the display
+                    renderStoresInRadius();
+                } else {
+                    showCustomAlert('掃描完成', '呢個範圍內冇搵到新店舖。');
+                }
+            } catch (error) {
+                showCustomAlert('錯誤', `掃描失敗: ${error.message}`);
+            }
+        }
+
+        // Rescan route area for new stores
+        async function rescanRouteArea() {
+            if (routePoints.length < 2) {
+                showCustomAlert('錯誤', '未設定路線。');
+                return;
+            }
+
+            const startPoint = routePoints[0];
+            const endPoint = routePoints[1];
+
+            // Calculate center and radius
+            const centerLat = (startPoint.lat + endPoint.lat) / 2;
+            const centerLng = (startPoint.lng + endPoint.lng) / 2;
+            const radius = L.latLng(startPoint.lat, startPoint.lng).distanceTo(L.latLng(endPoint.lat, endPoint.lng)) / 2 + 2000; // Add 2km buffer
+
+            showCustomAlert('開始掃描', `正在重新掃描路線範圍內嘅便利店...\n\n檢查有冇新店舖。`);
+
+            try {
+                const newStores = await scanAreaForStores(centerLat, centerLng, radius);
+
+                if (newStores.length > 0) {
+                    showCustomAlert('掃描完成', `搵到 ${newStores.length} 間新店舖！\n\n已經加咗上地圖。`);
+                    // Recalculate route
+                    calculateRouteClusters();
+                } else {
+                    showCustomAlert('掃描完成', '呢個範圍內冇搵到新店舖。');
+                }
+            } catch (error) {
+                showCustomAlert('錯誤', `掃描失敗: ${error.message}`);
+            }
+        }
+
+        // Rescan area cluster for new stores
+        async function rescanAreaStores(clusterIdx) {
+            const cluster = window.routeClusters[clusterIdx];
+            if (!cluster) {
+                showCustomAlert('錯誤', '搵唔到區域資訊。');
+                return;
+            }
+
+            showCustomAlert('開始掃描', `正在重新掃描區域 ${clusterIdx + 1} 嘅便利店...\n\n檢查有冇新店舖。`);
+
+            try {
+                const newStores = await scanAreaForStores(cluster.center.lat, cluster.center.lng, 2000); // 2km radius
+
+                if (newStores.length > 0) {
+                    showCustomAlert('掃描完成', `搵到 ${newStores.length} 間新店舖！\n\n已經加咗上地圖。`);
+                    // Recalculate clusters
+                    calculateRouteClusters();
+                } else {
+                    showCustomAlert('掃描完成', '呢個範圍內冇搵到新店舖。');
+                }
+            } catch (error) {
+                showCustomAlert('錯誤', `掃描失敗: ${error.message}`);
+            }
+        }
+
+        // Scan area for stores using Google Places API
+        async function scanAreaForStores(lat, lng, radius) {
+            const service = new google.maps.places.PlacesService(document.createElement('div'));
+            const newStores = [];
+
+            const convenienceStoreTypes = [
+                { keyword: '7-Eleven', brand: '7-Eleven' },
+                { keyword: 'Lawson', brand: 'Lawson' },
+                { keyword: 'FamilyMart', brand: 'FamilyMart' }
+            ];
+
+            for (const storeType of convenienceStoreTypes) {
+                const request = {
+                    location: new google.maps.LatLng(lat, lng),
+                    radius: radius,
+                    keyword: storeType.keyword,
+                    type: 'convenience_store'
+                };
+
+                const results = await new Promise((resolve, reject) => {
+                    service.nearbySearch(request, (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK) {
+                            resolve(results);
+                        } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                            resolve([]);
+                        } else {
+                            reject(new Error(`Places API error: ${status}`));
+                        }
+                    });
+                });
+
+                for (const place of results) {
+                    // Check if store already exists
+                    const exists = allStores.some(s => s.id === place.place_id);
+                    if (exists) continue;
+
+                    const newStore = {
+                        id: place.place_id,
+                        name: place.name,
+                        brand: storeType.brand,
+                        latitude: place.geometry.location.lat(),
+                        longitude: place.geometry.location.lng(),
+                        address: place.vicinity || ''
+                    };
+
+                    allStores.push(newStore);
+                    newStores.push(newStore);
+                }
+            }
+
+            return newStores;
+        }
+
+        window.rescanRadiusArea = rescanRadiusArea;
+        window.rescanRouteArea = rescanRouteArea;
+        window.rescanAreaStores = rescanAreaStores;
+
+        // Render stores for area selection mode
+        function renderStoresForAreaSelection(storesInCluster, allStoresInCluster) {
+            console.log('renderStoresForAreaSelection called, preferred stores:', storesInCluster.length, 'all stores:', allStoresInCluster ? allStoresInCluster.length : 0);
+
+            // Clear existing store markers (but keep route markers)
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+
+            const preferredIds = new Set(storesInCluster.map(s => s.id));
+            const storesToRender = allStoresInCluster && allStoresInCluster.length > 0 ? allStoresInCluster : storesInCluster;
+
+            // Add markers for all stores in cluster
+            storesToRender.forEach(store => {
+                const isPreferred = preferredIds.has(store.id);
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
+                const icon = L.divIcon({
+                    className: 'marker-icon',
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <div class="popup-title">${brandIcon} ${store.brand}${isPreferred ? '' : '（其他品牌）'}</div>
+                            <div class="popup-info">
+                                <div><strong>${store.name || ''}</strong></div>
+                            </div>
+                        </div>
+                    `);
+
+                // Store reference for later selection
+                marker.storeData = store;
+
+                // Add click handler for start point selection
+                marker.on('click', function() {
+                    handleStoreMarkerClick(marker, store);
+                });
+
+                // Add to storeMarkers array to keep track
+                storeMarkers.push(marker);
+            });
+
+            console.log('Added', storeMarkers.length, 'markers to map for area selection');
+        }
+
+        // Direct map selection for area route mode
+        function directMapSelectionForArea(storesInCluster, clusterCenter, clusterIdx, allStoresInCluster) {
+            // Set flag FIRST to prevent any clears
+            isSelectingStartStore = true;
+
+            // Store for later use
+            tempStoresForSelection = { storesInCluster, clusterCenter, clusterIdx, allStoresInCluster };
+            startStoreSelectionMode = true;
+
+            console.log('directMapSelectionForArea called');
+            console.log('storesInCluster count:', storesInCluster.length);
+            console.log('isSelectingStartStore set to:', isSelectingStartStore);
+
+            // Show a simple message at the top - NO dialog, NO marker modification
+            const message = document.createElement('div');
+            message.id = 'selection-message';
+            message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點';
+            document.body.appendChild(message);
+
+            console.log('Selection mode activated for area - markers unchanged');
+
+            // Remove message after 5 seconds
+            setTimeout(() => {
+                const msg = document.getElementById('selection-message');
+                if (msg) {
+                    msg.style.animation = 'fadeOut 0.3s';
+                    setTimeout(() => msg.remove(), 300);
+                }
+            }, 5000);
+        }
+
+        // Find nearest store and show route
+        let routePolyline = null;
+        function findNearestStore() {
+            if (!searchCircle || !searchMarker) {
+                showCustomAlert('錯誤', '請先設定搜尋範圍。\n㩒地圖揀搜尋區域。');
+                return;
+            }
+
+            const centerLatLng = searchMarker.getLatLng();
+
+            // Find all stores within the search circle
+            let nearestStore = null;
+            let minDistance = Infinity;
+
+            const allStores = [...stores, ...gyms];
+
+            allStores.forEach(store => {
+                const storeLatLng = L.latLng(store.latitude, store.longitude);
+                const distance = centerLatLng.distanceTo(storeLatLng);
+
+                if (distance <= currentRadiusMeters && distance < minDistance) {
+                    // Check if store matches current filters
+                    if (store.type === 'gym') {
+                        if (!filters.showGyms) return;
+                        if (store.gymType === 'pokemon_center' && !filters.showPokemonCenter) return;
+                        if (store.gymType === 'card_shop' && !filters.showCardShop) return;
+                    } else {
+                        if (!filters.showStores) return;
+                        if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                        if (store.brand === 'Lawson' && !filters.showLawson) return;
+                        if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+                    }
+
+                    minDistance = distance;
+                    nearestStore = store;
+                }
+            });
+
+            if (!nearestStore) {
+                showCustomAlert('冇結果', '搜尋範圍內搵唔到店舖。\n擴大半徑再試。');
+                return;
+            }
+
+            // Remove old route line if exists
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+            }
+
+            // Draw route line
+            const storeLatLng = L.latLng(nearestStore.latitude, nearestStore.longitude);
+            routePolyline = L.polyline([centerLatLng, storeLatLng], {
+                color: '#4CAF50',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '10, 10'
+            }).addTo(map);
+
+            // Add marker to nearest store
+            const distanceKm = (minDistance / 1000).toFixed(2);
+            const storeName = nearestStore.name || nearestStore.brand;
+
+            const markerIcon = nearestStore.type === 'gym'
+                ? (nearestStore.gymType === 'pokemon_center' ? '⭐' : '🏪')
+                : (nearestStore.brand === '7-Eleven' ? '🟢' : (nearestStore.brand === 'Lawson' ? '🔵' : '🟡'));
+
+            const marker = L.marker(storeLatLng, {
+                icon: L.divIcon({
+                    className: 'marker-icon',
+                    html: `<div style="font-size: 24px; animation: bounce 1s infinite;">${markerIcon}</div>`,
+                    iconSize: [40, 40]
+                }),
+                zIndexOffset: 1000
+            }).addTo(map).bindPopup(`
+                <strong>${storeName}</strong><br>
+                距離: ${distanceKm} km<br>
+                步行約 ${Math.ceil(minDistance / 80)} 分鐘
+            `).openPopup();
+
+            // Pan to show both points
+            const bounds = L.latLngBounds([centerLatLng, storeLatLng]);
+            map.fitBounds(bounds, { padding: [50, 50] });
+
+            // Show success message
+            showCustomAlert('最近店舖', `${storeName}\n距離: ${distanceKm} km\n步行約 ${Math.ceil(minDistance / 80)} 分鐘`);
+
+            // Store the marker for cleanup
+            window.nearestStoreMarker = marker;
+        }
+        window.findNearestStore = findNearestStore;
+
+        // ==================== Route Planning ====================
+        function toggleRoutePlanning() {
+            const btn = document.getElementById('routePlanBtn');
+
+            // If there's an existing route, clear it first
+            if (routePoints.length >= 2 && !routePlanningMode) {
+                clearRoutePlanning();
+                renderMarkers();
+                return;
+            }
+
+            routePlanningMode = !routePlanningMode;
+
+            if (routePlanningMode) {
+                // Clear search mode if active
+                if (searchMode) {
+                    toggleSearchMode();
+                }
+
+                btn.style.background = '#FF5722';
+                btn.textContent = '❌';
+                map.getContainer().style.cursor = 'crosshair';
+
+                // Hide all markers for easier selection
+                hideAllMarkers();
+
+                // Show instruction
+                showCustomAlert('路線規劃', '喺地圖上㩒多個地點。\n可以揀兩個或以上地點。\n完成後㩒 ❌ 掣。');
+            } else {
+                // Finish route planning
+                if (routePoints.length >= 2) {
+                    drawRoute();
+                } else {
+                    // Not enough points, clear everything and restore all markers
+                    clearRoutePlanning();
+                    renderMarkers();
+                }
+
+                btn.style.background = '#2196F3';
+                btn.textContent = '🗺️';
+                map.getContainer().style.cursor = '';
+            }
+        }
+
+        function hideAllMarkers() {
+            // Remove all store markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+
+            // Remove all gym markers
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers = [];
+        }
+
+        function clearRoutePlanning() {
+            // Remove all route markers
+            routeMarkers.forEach(marker => map.removeLayer(marker));
+            routeMarkers = [];
+
+            // Remove all area markers
+            areaMarkers.forEach(marker => map.removeLayer(marker));
+            areaMarkers = [];
+
+            // Remove all store markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+
+            // Remove all gym markers
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers = [];
+
+            // Remove route line
+            if (routeLine) {
+                map.removeLayer(routeLine);
+                routeLine = null;
+            }
+
+            // Remove route buffer
+            if (routeBuffer) {
+                map.removeLayer(routeBuffer);
+                routeBuffer = null;
+            }
+
+            // Remove route polyline (for radius mode optimal route)
+            if (window.routePolyline) {
+                map.removeLayer(window.routePolyline);
+                window.routePolyline = null;
+            }
+
+            // Remove optimal route line if exists
+            if (window.optimalRouteLine) {
+                map.removeLayer(window.optimalRouteLine);
+                window.optimalRouteLine = null;
+            }
+
+            // Clear route points
+            routePoints = [];
+
+            // Hide radius info panel
+            document.getElementById('radiusInfo').classList.remove('show');
+
+            // Clear selection mode flags
+            isSelectingStartStore = false;
+            startStoreSelectionMode = false;
+            tempStoresForSelection = null;
+            tempCenterForSelection = null;
+
+            // Reset view-mode flags. If area-detail mode stays true, the zoomend
+            // handler stops calling renderMarkers(), so the prefecture badges
+            // never come back after using route/area mode. (bug fix)
+            areaDetailMode = false;
+            currentAreaStores = [];
+
+            console.log('clearRoutePlanning: All markers, routes, and lines cleared');
+        }
+
+        // Global function for button onclick
+        function clearRoute() {
+            clearRoutePlanning();
+            // Restore all markers when route is cleared
+            renderMarkers();
+        }
+        window.clearRoute = clearRoute;
+
+        function handleRouteClick(e) {
+            const pointNumber = routePoints.length + 1;
+            routePoints.push(e.latlng);
+
+            // Different icons for different points
+            let iconHtml;
+            if (pointNumber === 1) {
+                iconHtml = '🚩'; // Start
+            } else if (pointNumber === routePoints.length && !routePlanningMode) {
+                iconHtml = '🏁'; // End (when finished)
+            } else {
+                iconHtml = `${pointNumber}`; // Numbered waypoints
+            }
+
+            const marker = L.marker(e.latlng, {
+                icon: L.divIcon({
+                    className: 'marker-icon',
+                    html: iconHtml,
+                    iconSize: [40, 40]
+                })
+            }).addTo(map).bindPopup(`地點 ${pointNumber}`);
+
+            routeMarkers.push(marker);
+
+            // Draw connecting line if there are at least 2 points
+            if (routePoints.length >= 2) {
+                // Remove old line if exists
+                if (routeLine) {
+                    map.removeLayer(routeLine);
+                }
+
+                // Draw polyline through all points
+                routeLine = L.polyline(routePoints, {
+                    color: '#2196F3',
+                    weight: 4,
+                    opacity: 0.8,
+                    dashArray: routePlanningMode ? '10, 10' : null // Dashed while planning
+                }).addTo(map);
+            }
+        }
+
+        function drawRouteOnly() {
+            if (routePoints.length < 2) return;
+
+            // Draw line through all points
+            routeLine = L.polyline(routePoints, {
+                color: '#2196F3',
+                weight: 4,
+                opacity: 0.8
+            }).addTo(map);
+
+            // No buffer circles - just the line
+
+            // Update count only (no marker re-render)
+            countStoresAlongRoute();
+        }
+
+        function drawRoute() {
+            if (routePoints.length < 2) return;
+
+            // Draw line through all points
+            routeLine = L.polyline(routePoints, {
+                color: '#2196F3',
+                weight: 4,
+                opacity: 0.8
+            }).addTo(map);
+
+            // Render area markers first (creates clusters)
+            renderMarkersInRoute();
+
+            // Then count stores (uses cluster info)
+            countStoresAlongRoute();
+
+            // Automatically calculate optimal route through stores
+            calculateOptimalStoreRoute();
+
+            // Fit map to show entire route
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+        }
+
+        // Calculate optimal route through all stores in the route buffer
+        function calculateOptimalStoreRoute() {
+            if (routePoints.length < 2) return;
+
+            const filters = getFilters();
+            const storesInRoute = [];
+
+            // Fast shared buffer tester (precomputed once).
+            const isInRouteBuffer = makeRouteBufferTester(routePoints, currentRadiusMeters);
+
+            // Collect all stores within the route buffer
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                    if (isInRouteBuffer(store.latitude, store.longitude)) {
+                        storesInRoute.push({
+                            ...store,
+                            latlng: L.latLng(store.latitude, store.longitude)
+                        });
+                    }
+                });
+            }
+
+            if (storesInRoute.length === 0) return;
+
+            // Find optimal order using TSP nearest neighbor
+            const startPoint = routePoints[0];
+            const endPoint = routePoints[routePoints.length - 1];
+
+            // Sort stores by nearest neighbor from start
+            const orderedStores = [];
+            const visited = new Set();
+            let currentPos = startPoint;
+
+            while (orderedStores.length < storesInRoute.length) {
+                let nearestIdx = -1;
+                let minDist = Infinity;
+
+                for (let i = 0; i < storesInRoute.length; i++) {
+                    if (visited.has(i)) continue;
+
+                    const dist = currentPos.distanceTo(storesInRoute[i].latlng);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                if (nearestIdx !== -1) {
+                    visited.add(nearestIdx);
+                    orderedStores.push(storesInRoute[nearestIdx]);
+                    currentPos = storesInRoute[nearestIdx].latlng;
+                }
+            }
+
+            // Draw optimized route through stores (DISABLED - not needed)
+            // if (window.optimalRouteLine) {
+            //     map.removeLayer(window.optimalRouteLine);
+            // }
+            // const routeCoords = [startPoint, ...orderedStores.map(s => s.latlng), endPoint];
+            // window.optimalRouteLine = L.polyline(routeCoords, {
+            //     color: '#4CAF50',
+            //     weight: 3,
+            //     opacity: 0.9,
+            //     dashArray: '10, 5'
+            // }).addTo(map);
+
+            // Calculate total distance (for reference, not displayed)
+            const routeCoords = [startPoint, ...orderedStores.map(s => s.latlng), endPoint];
+            let totalDist = 0;
+            for (let i = 0; i < routeCoords.length - 1; i++) {
+                totalDist += routeCoords[i].distanceTo(routeCoords[i + 1]);
+            }
+
+            // Update info panel with optimized route info (DISABLED - not needed)
+            // const infoPanel = document.getElementById('radiusInfo');
+            // if (infoPanel) {
+            //     const extraInfo = document.createElement('div');
+            //     extraInfo.id = 'optimalRouteInfo';
+            //     extraInfo.style.cssText = 'margin-top: 10px; padding: 8px; background: #e8f5e9; border-radius: 4px; font-size: 12px;';
+            //     extraInfo.innerHTML = `
+            //         <strong>🚶 最適ルート</strong><br>
+            //         訪問店舗数: ${orderedStores.length} 件<br>
+            //         総距離: ${(totalDist/1000).toFixed(1)} km<br>
+            //         <span style="color: #4CAF50;">✓ 最短順序で表示中</span>
+            //     `;
+            //     const oldInfo = document.getElementById('optimalRouteInfo');
+            //     if (oldInfo) oldInfo.remove();
+            //     const detailsDiv = document.getElementById('radiusDetails');
+            //     if (detailsDiv) {
+            //         detailsDiv.insertAdjacentElement('afterend', extraInfo);
+            //     }
+            // }
+        }
+
+        // Optimize route using Nearest Neighbor algorithm
+        function optimizeRoute() {
+            if (routePoints.length < 3) {
+                showCustomAlert('錯誤', '最佳化需要 3 個或以上地點。');
+                return;
+            }
+
+            // Calculate current route distance
+            const currentDistance = calculateTotalDistance(routePoints);
+
+            // Use Nearest Neighbor algorithm
+            const optimized = nearestNeighborTSP(routePoints);
+            const optimizedDistance = calculateTotalDistance(optimized);
+
+            // Update route points
+            routePoints = optimized;
+
+            // Redraw route
+            if (routeLine) {
+                map.removeLayer(routeLine);
+            }
+
+            routeLine = L.polyline(routePoints, {
+                color: '#4CAF50',  // Green for optimized route
+                weight: 4,
+                opacity: 0.8
+            }).addTo(map);
+
+            // Update markers
+            routeMarkers.forEach(marker => map.removeLayer(marker));
+            routeMarkers = [];
+
+            routePoints.forEach((point, idx) => {
+                let iconHtml;
+                if (idx === 0) {
+                    iconHtml = '🚩'; // Start
+                } else if (idx === routePoints.length - 1) {
+                    iconHtml = '🏁'; // End
+                } else {
+                    iconHtml = `${idx + 1}`; // Numbered waypoints
+                }
+
+                const marker = L.marker(point, {
+                    icon: L.divIcon({
+                        className: 'marker-icon',
+                        html: iconHtml,
+                        iconSize: [40, 40]
+                    })
+                }).addTo(map).bindPopup(`地點 ${idx + 1}`);
+
+                routeMarkers.push(marker);
+            });
+
+            // Recalculate stores
+            renderMarkersInRoute();
+            countStoresAlongRoute();
+
+            // Show improvement
+            const improvement = ((currentDistance - optimizedDistance) / currentDistance * 100).toFixed(1);
+            const savedKm = ((currentDistance - optimizedDistance) / 1000).toFixed(1);
+
+            showCustomAlert(
+                '路線最佳化完成',
+                `原本距離: ${(currentDistance/1000).toFixed(1)} km\n` +
+                `最佳化後: ${(optimizedDistance/1000).toFixed(1)} km\n` +
+                `縮短: ${savedKm} km（改善 ${improvement}%）`
+            );
+        }
+
+        // Calculate total distance for a route
+        function calculateTotalDistance(points) {
+            let total = 0;
+            for (let i = 0; i < points.length - 1; i++) {
+                total += points[i].distanceTo(points[i + 1]);
+            }
+            return total;
+        }
+
+        // Nearest Neighbor TSP algorithm
+        function nearestNeighborTSP(points) {
+            if (points.length <= 2) return points;
+
+            const visited = new Set();
+            const result = [];
+
+            // Start with first point
+            let current = 0;
+            result.push(points[current]);
+            visited.add(current);
+
+            // Visit nearest unvisited point
+            while (visited.size < points.length) {
+                let nearestIdx = -1;
+                let minDist = Infinity;
+
+                for (let i = 0; i < points.length; i++) {
+                    if (visited.has(i)) continue;
+
+                    const dist = points[current].distanceTo(points[i]);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                if (nearestIdx !== -1) {
+                    visited.add(nearestIdx);
+                    result.push(points[nearestIdx]);
+                    current = nearestIdx;
+                }
+            }
+
+            return result;
+        }
+
+        window.optimizeRoute = optimizeRoute;
+
+        function renderMarkersInRoute() {
+            // Clear existing markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers = [];
+            areaMarkers.forEach(marker => map.removeLayer(marker));
+            areaMarkers = [];
+
+            if (routePoints.length < 2) return;
+
+            const filters = getFilters();
+            const bufferRadius = currentRadiusMeters;
+            const clusterRadius = currentRadiusMeters; // Use same radius as search range, not fixed 2km
+
+            // Collect all stores within route buffer
+            const storesInRoute = [];
+
+            const isInRouteBuffer = makeRouteBufferTester(routePoints, bufferRadius);
+
+            // Collect stores in route
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                    if (isInRouteBuffer(store.latitude, store.longitude)) {
+                        storesInRoute.push(store);
+                    }
+                });
+            }
+
+            // Cluster stores using same radius as search range
+            const clusters = [];
+            const used = new Set();
+
+            storesInRoute.forEach((store, idx) => {
+                if (used.has(idx)) return;
+
+                const cluster = {
+                    center: { lat: store.latitude, lng: store.longitude },
+                    stores: [store]
+                };
+                used.add(idx);
+
+                // Find all stores within cluster radius (same as search range)
+                storesInRoute.forEach((otherStore, otherIdx) => {
+                    if (used.has(otherIdx)) return;
+
+                    const dist = L.latLng(store.latitude, store.longitude).distanceTo(
+                        L.latLng(otherStore.latitude, otherStore.longitude)
+                    );
+
+                    if (dist <= clusterRadius) {
+                        cluster.stores.push(otherStore);
+                        used.add(otherIdx);
+                    }
+                });
+
+                // Calculate cluster center (average position)
+                let sumLat = 0, sumLng = 0;
+                cluster.stores.forEach(s => {
+                    sumLat += s.latitude;
+                    sumLng += s.longitude;
+                });
+                cluster.center = {
+                    lat: sumLat / cluster.stores.length,
+                    lng: sumLng / cluster.stores.length
+                };
+
+                clusters.push(cluster);
+            });
+
+            // Find the cluster with most stores
+            let maxClusterIdx = 0;
+            let maxCount = clusters.length > 0 ? clusters[0].stores.length : 0;
+            clusters.forEach((cluster, idx) => {
+                if (cluster.stores.length > maxCount) {
+                    maxCount = cluster.stores.length;
+                    maxClusterIdx = idx;
+                }
+            });
+
+            // Render cluster markers
+            clusters.forEach((cluster, idx) => {
+                const count = cluster.stores.length;
+                const isHighest = idx === maxClusterIdx && clusters.length > 1;
+
+                // Count by brand
+                const brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+                cluster.stores.forEach(store => {
+                    if (brandCounts[store.brand] !== undefined) {
+                        brandCounts[store.brand]++;
+                    }
+                });
+
+                // Create popup content with "Show Stores" button
+                let popupHtml = `<div style="min-width: 200px;">`;
+                popupHtml += `<div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">`;
+                popupHtml += isHighest ? `⭐ 區域 ${idx + 1}（最多!）` : `區域 ${idx + 1}`;
+                popupHtml += `</div>`;
+                popupHtml += `<div style="font-size: 14px; margin-bottom: 8px;">合共: <strong>${count}</strong> 間</div>`;
+                popupHtml += `<div style="font-size: 12px; color: #666;">`;
+                if (brandCounts['7-Eleven'] > 0) popupHtml += `🟢 7-Eleven: ${brandCounts['7-Eleven']}<br>`;
+                if (brandCounts['Lawson'] > 0) popupHtml += `🔵 Lawson: ${brandCounts['Lawson']}<br>`;
+                if (brandCounts['FamilyMart'] > 0) popupHtml += `🟡 FamilyMart: ${brandCounts['FamilyMart']}<br>`;
+                popupHtml += `</div>`;
+                popupHtml += `<div style="font-size: 11px; color: #999; margin-top: 8px;">半徑 ${(clusterRadius / 1000).toFixed(1)} km 以內</div>`;
+                popupHtml += `<button onclick="showAreaStores(${idx})" style="margin-top: 10px; padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">顯示店舖</button>`;
+                popupHtml += `</div>`;
+
+                // Create marker icon
+                const iconHtml = isHighest ? `<div style="background: #FF5722; color: white; border-radius: 50%; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">${count}</div>` :
+                    `<div style="background: #2196F3; color: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">${count}</div>`;
+
+                const marker = L.marker([cluster.center.lat, cluster.center.lng], {
+                    icon: L.divIcon({
+                        className: 'cluster-marker',
+                        html: iconHtml,
+                        iconSize: isHighest ? [50, 50] : [40, 40]
+                    })
+                }).addTo(map).bindPopup(popupHtml);
+
+                areaMarkers.push(marker);
+
+                // Draw circle around cluster area
+                const circle = L.circle([cluster.center.lat, cluster.center.lng], {
+                    radius: clusterRadius,
+                    color: isHighest ? '#FF5722' : '#2196F3',
+                    fillColor: isHighest ? '#FF5722' : '#2196F3',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    dashArray: '5, 5'
+                }).addTo(map);
+
+                areaMarkers.push(circle);
+            });
+
+            // Store cluster info globally for showAreaStores function
+            window.routeClusters = clusters;
+            window.maxClusterIdx = maxClusterIdx;
+        }
+
+        // Show stores in a specific area
+        function showAreaStores(clusterIdx) {
+            const cluster = window.routeClusters[clusterIdx];
+            if (!cluster) return;
+
+            // Remove area markers
+            areaMarkers.forEach(marker => map.removeLayer(marker));
+            areaMarkers = [];
+
+            // Set area detail mode
+            areaDetailMode = true;
+            currentAreaStores = cluster.stores;
+
+            // Render individual store markers
+            cluster.stores.forEach(store => {
+                const isVisited = visitedStores.has(getStoreKey(store));
+                let iconHtml, iconClass;
+
+                if (store.brand === '7-Eleven') {
+                    iconHtml = '🟢';
+                    iconClass = 'marker-icon marker-711';
+                } else if (store.brand === 'Lawson') {
+                    iconHtml = '🔵';
+                    iconClass = 'marker-icon marker-lawson';
+                } else if (store.brand === 'FamilyMart') {
+                    iconHtml = '🟡';
+                    iconClass = 'marker-icon marker-familymart';
+                }
+
+                if (isVisited) {
+                    iconClass += ' visited';
+                }
+
+                const icon = L.divIcon({
+                    className: iconClass,
+                    html: iconHtml,
+                    iconSize: [30, 30]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(createStorePopup(store));
+
+                storeMarkers.push(marker);
+            });
+
+            // Show back button in radius info
+            updateRadiusInfoForArea(clusterIdx, cluster);
+        }
+        window.showAreaStores = showAreaStores;
+
+        // Show all stores along the route (not just one area)
+        function showAllRouteStores() {
+            // Remove area markers
+            areaMarkers.forEach(marker => map.removeLayer(marker));
+            areaMarkers = [];
+
+            // Set area detail mode
+            areaDetailMode = true;
+
+            const filters = getFilters();
+            const bufferRadius = currentRadiusMeters;
+
+            const isInRouteBuffer = makeRouteBufferTester(routePoints, bufferRadius);
+
+            // Collect all stores in route
+            const allRouteStores = [];
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                    if (isInRouteBuffer(store.latitude, store.longitude)) {
+                        allRouteStores.push(store);
+                    }
+                });
+            }
+
+            currentAreaStores = allRouteStores;
+
+            // Render all stores
+            allRouteStores.forEach(store => {
+                const isVisited = visitedStores.has(getStoreKey(store));
+                let iconHtml, iconClass;
+
+                if (store.brand === '7-Eleven') {
+                    iconHtml = '🟢';
+                    iconClass = 'marker-icon marker-711';
+                } else if (store.brand === 'Lawson') {
+                    iconHtml = '🔵';
+                    iconClass = 'marker-icon marker-lawson';
+                } else if (store.brand === 'FamilyMart') {
+                    iconHtml = '🟡';
+                    iconClass = 'marker-icon marker-familymart';
+                }
+
+                if (isVisited) {
+                    iconClass += ' visited';
+                }
+
+                const icon = L.divIcon({
+                    className: iconClass,
+                    html: iconHtml,
+                    iconSize: [30, 30]
+                });
+
+                const marker = L.marker([store.latitude, store.longitude], { icon })
+                    .addTo(map)
+                    .bindPopup(createStorePopup(store));
+
+                storeMarkers.push(marker);
+            });
+
+            // Update info panel
+            updateRadiusInfoForAllStores(allRouteStores);
+        }
+        window.showAllRouteStores = showAllRouteStores;
+
+        // Update radius info for all route stores
+        function updateRadiusInfoForAllStores(stores) {
+            const brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+            stores.forEach(store => {
+                if (brandCounts[store.brand] !== undefined) {
+                    brandCounts[store.brand]++;
+                }
+            });
+
+            let detailsHtml = `<button onclick="backToAreaView()" style="margin-bottom: 10px; padding: 6px 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">← 返回區域列表</button>`;
+            detailsHtml += `<div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">`;
+            detailsHtml += `📍 整條路線嘅店舖`;
+            detailsHtml += `</div>`;
+            detailsHtml += `<div style="font-size: 14px; margin-bottom: 8px;">合共: <strong>${stores.length}</strong> 間</div>`;
+
+            if (brandCounts['7-Eleven'] > 0) detailsHtml += `🟢 7-Eleven: ${brandCounts['7-Eleven']}<br>`;
+            if (brandCounts['Lawson'] > 0) detailsHtml += `🔵 Lawson: ${brandCounts['Lawson']}<br>`;
+            if (brandCounts['FamilyMart'] > 0) detailsHtml += `🟡 FamilyMart: ${brandCounts['FamilyMart']}<br>`;
+
+            document.getElementById('radiusCount').textContent = `${stores.length} 間`;
+            document.getElementById('radiusDetails').innerHTML = detailsHtml;
+            document.getElementById('radiusButtons').innerHTML = ''; // Clear buttons
+            document.getElementById('radiusInfo').classList.add('show');
+        }
+
+        // Update radius info with back button
+        function updateRadiusInfoForArea(clusterIdx, cluster) {
+            const brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+            cluster.stores.forEach(store => {
+                if (brandCounts[store.brand] !== undefined) {
+                    brandCounts[store.brand]++;
+                }
+            });
+
+            const isHighest = clusterIdx === window.maxClusterIdx;
+
+            let detailsHtml = `<button onclick="backToAreaView()" style="margin-bottom: 10px; padding: 6px 12px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">← 返回區域列表</button>`;
+            detailsHtml += `<div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">`;
+            detailsHtml += isHighest ? `⭐ 區域 ${clusterIdx + 1}（最多!）` : `區域 ${clusterIdx + 1}`;
+            detailsHtml += `</div>`;
+            detailsHtml += `<div style="font-size: 14px; margin-bottom: 8px;">合共: <strong>${cluster.stores.length}</strong> 間</div>`;
+
+            if (brandCounts['7-Eleven'] > 0) detailsHtml += `🟢 7-Eleven: ${brandCounts['7-Eleven']}<br>`;
+            if (brandCounts['Lawson'] > 0) detailsHtml += `🔵 Lawson: ${brandCounts['Lawson']}<br>`;
+            if (brandCounts['FamilyMart'] > 0) detailsHtml += `🟡 FamilyMart: ${brandCounts['FamilyMart']}<br>`;
+
+            document.getElementById('radiusCount').textContent = `${cluster.stores.length} 間`;
+            document.getElementById('radiusDetails').innerHTML = detailsHtml;
+
+            // Add Google Maps button for area stores
+            if (cluster.stores.length > 0) {
+                document.getElementById('radiusButtons').innerHTML = `
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button onclick="openAreaRouteInGoogleMaps(${clusterIdx})" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                        <button onclick="clearRoute()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
+                    </div>
+                `;
+            } else {
+                document.getElementById('radiusButtons').innerHTML = '';
+            }
+
+            document.getElementById('radiusInfo').classList.add('show');
+
+            // Close any open popups
+            map.closePopup();
+        }
+
+        // Calculate optimal route using nearest neighbor algorithm
+        function calculateOptimalRoute(clusterIdx) {
+            const cluster = window.routeClusters[clusterIdx];
+            if (!cluster || cluster.stores.length === 0) return;
+
+            // Use nearest neighbor algorithm (greedy approach)
+            const stores = [...cluster.stores];
+            const route = [];
+
+            // Start from cluster center (or first store)
+            let currentPos = cluster.center;
+            const remaining = [...stores];
+
+            // Build route by always going to nearest unvisited store
+            while (remaining.length > 0) {
+                let nearestIdx = 0;
+                let nearestDist = L.latLng(currentPos.lat, currentPos.lng).distanceTo(
+                    L.latLng(remaining[0].latitude, remaining[0].longitude)
+                );
+
+                for (let i = 1; i < remaining.length; i++) {
+                    const dist = L.latLng(currentPos.lat, currentPos.lng).distanceTo(
+                        L.latLng(remaining[i].latitude, remaining[i].longitude)
+                    );
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestIdx = i;
+                    }
+                }
+
+                const nextStore = remaining[nearestIdx];
+                route.push(nextStore);
+                currentPos = { lat: nextStore.latitude, lng: nextStore.longitude };
+                remaining.splice(nearestIdx, 1);
+            }
+
+            // Calculate total distance
+            let totalDistance = 0;
+            for (let i = 0; i < route.length - 1; i++) {
+                totalDistance += L.latLng(route[i].latitude, route[i].longitude).distanceTo(
+                    L.latLng(route[i + 1].latitude, route[i + 1].longitude)
+                );
+            }
+
+            // Google Maps has a limit of ~10 waypoints for directions
+            // If more than 10 stores, we'll create multiple routes or use a different approach
+            if (route.length <= 10) {
+                openGoogleMapsRoute(route, totalDistance);
+            } else {
+                // For more than 10 stores, open with first 10 and show a message
+                const limitedRoute = route.slice(0, 10);
+                openGoogleMapsRoute(limitedRoute, totalDistance, route.length);
+            }
+        }
+
+        // Open Google Maps with the optimized route
+        function openGoogleMapsRoute(route, totalDistance, originalLength) {
+            if (route.length === 0) return;
+
+            // Build Google Maps Directions URL
+            // Format: origin=lat,lng&destination=lat,lng&waypoints=lat1,lng1|lat2,lng2|...
+            const origin = `${route[0].latitude},${route[0].longitude}`;
+            const destination = `${route[route.length - 1].latitude},${route[route.length - 1].longitude}`;
+
+            let waypoints = '';
+            if (route.length > 2) {
+                const waypointCoords = route.slice(1, -1).map(store =>
+                    `${store.latitude},${store.longitude}`
+                );
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
+            }
+
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
+
+            // Show confirmation with route details
+            const storeList = route.slice(0, 5).map((store, idx) =>
+                `${idx + 1}. ${store.brand} - ${store.name}`
+            ).join('\n');
+
+            let message = `已經整好最佳化路線！\n\n到訪順序（頭 5 間店舖）:\n${storeList}${route.length > 5 ? `\n... 仲有 ${route.length - 5} 間` : ''}\n\n用 Google Maps 開啟？`;
+
+            showCustomConfirm('開啟路線', message,
+                () => {
+                    console.log('Opening Google Maps:', googleMapsUrl);
+                    const opened = window.open(googleMapsUrl, '_blank');
+
+                    // Show warning message after opening (if route was limited)
+                    if (originalLength && originalLength > 10) {
+                        setTimeout(() => {
+                            showCustomAlert('注意', `Google Maps 最多支援 10 個途經點。\n只顯示咗頭 10 間店舖嘅路線。\n\n店舖總數: ${originalLength}\n顯示: 頭 10 間\n估計總距離: ${(totalDistance / 1000).toFixed(1)} km`);
+                        }, 500);
+                    }
+
+                    if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+                        // Popup blocked, show link instead
+                        showGoogleMapsLink(googleMapsUrl);
+                    }
+                },
+                null
+            );
+        }
+
+        // Show Google Maps link if popup is blocked
+        function showGoogleMapsLink(url) {
+            const linkHtml = `<a href="${url}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
+            showCustomAlert('彈出視窗被封鎖',
+                `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
+        }
+
+        // Go back to area view
+        function backToAreaView() {
+            areaDetailMode = false;
+            currentAreaStores = [];
+
+            // Clear existing markers
+            storeMarkers.forEach(marker => map.removeLayer(marker));
+            storeMarkers = [];
+            gymMarkers.forEach(marker => map.removeLayer(marker));
+            gymMarkers = [];
+
+            renderMarkersInRoute();
+            countStoresAlongRoute();
+        }
+        window.backToAreaView = backToAreaView;
+
+        function countStoresAlongRoute() {
+            if (routePoints.length < 2) return;
+
+            const filters = getFilters();
+            let storesCount = 0;
+            let brandCounts = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+
+            const bufferRadius = currentRadiusMeters;
+
+            // Helper function to check if point is within route buffer
+            const isInRouteBuffer = makeRouteBufferTester(routePoints, bufferRadius);
+
+            // Check each store
+            if (filters.showStores) {
+                allStores.forEach(store => {
+                    if (store.brand === '7-Eleven' && !filters.show7Eleven) return;
+                    if (store.brand === 'Lawson' && !filters.showLawson) return;
+                    if (store.brand === 'FamilyMart' && !filters.showFamilyMart) return;
+
+                    if (isInRouteBuffer(store.latitude, store.longitude)) {
+                        storesCount++;
+                        if (brandCounts[store.brand] !== undefined) {
+                            brandCounts[store.brand]++;
+                        }
+                    }
+                });
+            }
+
+            // Calculate total route distance
+            let totalDistance = 0;
+            for (let i = 0; i < routePoints.length - 1; i++) {
+                totalDistance += routePoints[i].distanceTo(routePoints[i + 1]);
+            }
+            const routeDistance = (totalDistance / 1000).toFixed(1);
+
+            // Get cluster info if available
+            const clusters = window.routeClusters || [];
+            const maxClusterIdx = window.maxClusterIdx || 0;
+
+            // Display results
+            document.getElementById('radiusCount').textContent = `${storesCount} 間`;
+
+            let detailsHtml = '';
+
+            // Left column
+            detailsHtml += `<div>`;
+            detailsHtml += `<strong>路線距離: ${routeDistance} km</strong><br>`;
+            detailsHtml += `地點數: ${routePoints.length}<br>`;
+            detailsHtml += `範圍: 單邊 ${(bufferRadius / 1000).toFixed(1)} km`;
+
+            // Show cluster info
+            if (clusters.length > 0) {
+                detailsHtml += `<br><br><strong style="color: #2196F3;">📍 區域數: ${clusters.length}</strong><br>`;
+                detailsHtml += `<small style="color: #666;">地圖上嘅數字 = ${(bufferRadius / 1000).toFixed(1)}km 範圍內嘅店舖數</small>`;
+            }
+            detailsHtml += `</div>`;
+
+            // Right column
+            detailsHtml += `<div>`;
+
+            // Most dense area
+            if (clusters.length > 0) {
+                const maxCluster = clusters[maxClusterIdx];
+                detailsHtml += `<strong style="color: #FF5722;">⭐ 最密集區域 ${maxClusterIdx + 1}:</strong><br>`;
+                detailsHtml += `店舖數: ${maxCluster.stores.length} 間<br>`;
+                detailsHtml += `<small style="color: #666;">㩒紅色數字睇詳情</small>`;
+            }
+
+            detailsHtml += `<br><br><strong>整條路線合計:</strong><br>`;
+            detailsHtml += `便利店: ${storesCount} 間`;
+
+            if (storesCount > 0) {
+                detailsHtml += `<br>`;
+                const brands = [
+                    { name: '7-Eleven', emoji: '🟢', count: brandCounts['7-Eleven'], show: filters.show7Eleven },
+                    { name: 'Lawson', emoji: '🔵', count: brandCounts['Lawson'], show: filters.showLawson },
+                    { name: 'FamilyMart', emoji: '🟡', count: brandCounts['FamilyMart'], show: filters.showFamilyMart }
+                ];
+
+                brands.forEach(brand => {
+                    if (brand.show && brand.count > 0) {
+                        detailsHtml += `${brand.emoji} ${brand.name}: ${brand.count} `;
+                    }
+                });
+            }
+            detailsHtml += `</div>`;
+
+            // Full-width button row
+            if (storesCount > 0) {
+                detailsHtml += `
+                <div style="display: flex; gap: 8px; grid-column: 1 / -1; margin-top: 8px;">
+                    <button onclick="showAllRouteStores()" style="padding: 8px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; width: 100%;">📍 喺地圖顯示全部店舖</button>
+                </div>`;
+            }
+
+            document.getElementById('radiusDetails').innerHTML = detailsHtml;
+
+            // Add Google Maps button for route planning mode
+            if (storesCount > 0) {
+                document.getElementById('radiusButtons').innerHTML = `
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button onclick="openRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                        <button onclick="clearRoute()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
+                    </div>
+                `;
+            } else {
+                document.getElementById('radiusButtons').innerHTML = '';
+            }
+
+            document.getElementById('radiusInfo').classList.add('show');
+        }
+
+        // ==================== Start Application ====================
+        init();
+    </script>
+</body>
+</html>
