@@ -3087,7 +3087,10 @@
                         showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
                     }
                 },
-                null
+                () => {
+                    // User cancelled - return to store selection mode
+                    directMapSelectionForRoute(storesInRoute, startPoint, endPoint, allStoresInRoute || storesInRoute);
+                }
             );
         }
 
