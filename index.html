@@ -2647,7 +2647,8 @@
         function handleStoreMarkerClick(marker, store) {
             if (startStoreSelectionMode) {
                 // Show confirmation popup for the selected store
-                const preferredIds = new Set(tempStoresForSelection.storesInRadius.map(s => s.id));
+                const preferredList = tempStoresForSelection.storesInRadius || tempStoresForSelection.storesInRoute || [];
+                const preferredIds = new Set(preferredList.map(s => s.id));
                 const isPreferred = preferredIds.has(store.id);
                 const brandIcon = BRAND_ICONS[store.brand] || '🏪';
 
