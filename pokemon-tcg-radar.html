@@ -927,9 +927,26 @@
                 const SUPABASE_URL = 'https://mtljrpvfcbftgzblnidi.supabase.co';
                 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bGpycHZmY2JmdGd6YmxuaWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDQ1ODUsImV4cCI6MjEwMDY4MDU4NX0.ObBvnot5xwL6Wxbe6Hn-XF5xIGm-DccL3e_YZJa7c2A';
 
+                // Create loading progress bar
+                const progressContainer = document.createElement('div');
+                progressContainer.id = 'loadingProgress';
+                progressContainer.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 9999; min-width: 300px;';
+                progressContainer.innerHTML = `
+                    <div style="font-size: 14px; color: #333; margin-bottom: 8px; font-weight: 500;">載入店舖資料中...</div>
+                    <div style="background: #e0e0e0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div id="progressBar" style="background: linear-gradient(90deg, #4CAF50, #45a049); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <div id="progressText" style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">0 / 33,000</div>
+                `;
+                document.body.appendChild(progressContainer);
+
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+
                 // Fetch all stores using pagination (Supabase max is 1000 per request)
                 allStores = [];
                 const BATCH_SIZE = 1000;
+                const ESTIMATED_TOTAL = 33000; // Approximate total for progress calculation
                 let offset = 0;
                 let hasMore = true;
 
@@ -944,6 +961,12 @@
                     if (storesResponse.ok) {
                         const batch = await storesResponse.json();
                         allStores = allStores.concat(batch);
+
+                        // Update progress bar
+                        const progress = Math.min(100, (allStores.length / ESTIMATED_TOTAL) * 100);
+                        progressBar.style.width = progress + '%';
+                        progressText.textContent = `${allStores.length.toLocaleString()} / ${ESTIMATED_TOTAL.toLocaleString()}`;
+
                         console.log(`Loaded ${allStores.length} stores so far...`);
 
                         if (batch.length < BATCH_SIZE) {
@@ -957,12 +980,15 @@
                     }
                 }
 
+                // Remove progress bar
+                progressContainer.remove();
+
                 if (allStores.length > 0) {
                     console.log(`✅ Loaded ${allStores.length} stores from Supabase`);
 
                     // Show success message to user
                     const loadingMsg = document.createElement('div');
-                    loadingMsg.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 12px 24px; border-radius: 6px; z-index: 9999; font-size: 14px;';
+                    loadingMsg.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 12px 24px; border-radius: 6px; z-index: 9999; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
                     loadingMsg.textContent = `✓ 已載入 ${allStores.length.toLocaleString()} 間便利店`;
                     document.body.appendChild(loadingMsg);
                     setTimeout(() => loadingMsg.remove(), 3000);
