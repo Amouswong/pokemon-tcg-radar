@@ -2089,7 +2089,7 @@
             // Add Google Maps button for radius search mode
             document.getElementById('radiusButtons').innerHTML = `
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button onclick="openRadiusRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                    <button id="googleMapsButton" onclick="openRadiusRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
                     <button onclick="clearSearchArea()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
                 </div>
             `;
@@ -2253,6 +2253,14 @@
             console.log('allStoresInRadius count:', allStoresInRadius.length);
             console.log('isSelectingStartStore set to:', isSelectingStartStore);
 
+            // Update Google Maps button to Cancel button
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '✕ 取消 Google Maps 導航';
+                googleMapsButton.style.background = '#f44336';
+                googleMapsButton.onclick = cancelGoogleMapsNavigation;
+            }
+
             // Re-render ALL stores with visual distinction for preferred brands
             storeMarkers.forEach(marker => map.removeLayer(marker));
             storeMarkers = [];
@@ -2265,7 +2273,7 @@
 
                 const icon = L.divIcon({
                     className: 'marker-icon',
-                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.5'}; filter: ${isPreferred ? 'none' : 'grayscale(70%)'}; cursor: pointer;">${brandIcon}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -2295,7 +2303,7 @@
             const message = document.createElement('div');
             message.id = 'selection-message';
             message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
-            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點<br><small style="font-size: 12px; opacity: 0.9;">※ 光亮圖示＝你揀嘅品牌 / 淺色圖示＝其他品牌（不足 10 間時補上）</small>';
+            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點<br><small style="font-size: 12px; opacity: 0.9;">※ 光亮圖示＝你揀嘅品牌 / 淺色圖示＝其他品牌（全部都可以揀）</small>';
             document.body.appendChild(message);
 
             console.log('Selection mode activated - all stores rendered');
@@ -2309,6 +2317,41 @@
                 }
             }, 7000);
         }
+
+        // Cancel Google Maps navigation mode
+        function cancelGoogleMapsNavigation() {
+            // Clear selection mode
+            startStoreSelectionMode = false;
+            isSelectingStartStore = false;
+            tempStoresForSelection = null;
+            tempCenterForSelection = null;
+
+            // Remove pulsing effect from all markers
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker && layer.storeData) {
+                    const element = layer.getElement();
+                    if (element) {
+                        element.style.animation = '';
+                    }
+                }
+            });
+
+            // Remove selection message
+            const msg = document.getElementById('selection-message');
+            if (msg) msg.remove();
+
+            // Restore Google Maps button
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '🗺️ Google Maps';
+                googleMapsButton.style.background = '#2196F3';
+                googleMapsButton.onclick = openRadiusRouteInGoogleMaps;
+            }
+
+            // Re-render markers in normal mode
+            renderMarkers();
+        }
+        window.cancelGoogleMapsNavigation = cancelGoogleMapsNavigation;
 
         // Render stores for route selection mode
         function renderStoresForRouteSelection(storesInRoute, allStoresInRoute) {
@@ -2526,79 +2569,104 @@
         // Handle store marker click for start point selection
         function handleStoreMarkerClick(marker, store) {
             if (startStoreSelectionMode) {
-                startStoreSelectionMode = false;
-                isSelectingStartStore = false; // Clear flag
+                // Show confirmation popup for the selected store
+                const preferredIds = new Set(tempStoresForSelection.storesInRadius.map(s => s.id));
+                const isPreferred = preferredIds.has(store.id);
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
 
-                // Remove pulsing effect from all markers
-                map.eachLayer(function(layer) {
-                    if (layer instanceof L.Marker && layer.storeData) {
-                        const element = layer.getElement();
-                        if (element) {
-                            element.style.animation = '';
+                const confirmHtml = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">${brandIcon}</div>
+                        <div style="font-weight: bold; margin-bottom: 4px;">${store.brand}</div>
+                        <div style="font-size: 13px; color: #666; margin-bottom: 12px;">${store.name || ''}</div>
+                        ${isPreferred ? '' : '<div style="font-size: 12px; color: #f57c00; margin-bottom: 12px;">（其他品牌）</div>'}
+                        <div style="font-size: 13px;">確定以呢間店舖為起點？</div>
+                    </div>
+                `;
+
+                showCustomConfirm('確認起點', confirmHtml, () => {
+                    // User confirmed - now exit selection mode
+                    startStoreSelectionMode = false;
+                    isSelectingStartStore = false;
+
+                    // Remove pulsing effect from all markers
+                    map.eachLayer(function(layer) {
+                        if (layer instanceof L.Marker && layer.storeData) {
+                            const element = layer.getElement();
+                            if (element) {
+                                element.style.animation = '';
+                            }
                         }
-                    }
-                });
-
-                // Remove selection message
-                const msg = document.getElementById('selection-message');
-                if (msg) msg.remove();
-
-                // Check which mode this is
-                if (tempStoresForSelection && tempStoresForSelection.startPoint && tempStoresForSelection.endPoint) {
-                    // Route mode
-                    const { storesInRoute, startPoint, endPoint } = tempStoresForSelection;
-                    calculateAndShowRouteForNav(store, storesInRoute, startPoint, endPoint);
-                } else if (tempStoresForSelection && tempStoresForSelection.clusterCenter) {
-                    // Area mode
-                    const { storesInCluster, clusterCenter, clusterIdx, routeMode, fullStoresInCluster } = tempStoresForSelection;
-                    if (routeMode === 'coverage') {
-                        calculateAndShowCoverageRouteForArea(store, fullStoresInCluster || storesInCluster, clusterIdx);
-                        return;
-                    }
-                    calculateAndShowRouteForArea(store, storesInCluster, clusterCenter, clusterIdx);
-                } else if (tempStoresForSelection && tempCenterForSelection) {
-                    // Radius mode
-                    const { storesInRadius, allStoresInRadius, routeMode } = tempStoresForSelection;
-
-                    if (routeMode === 'coverage') {
-                        // "Pass by as many stores as possible" mode: use ALL matching
-                        // stores in radius (not capped at 10), then thin the TSP path
-                        // down to <=9 pin stops via Douglas-Peucker simplification.
-                        calculateAndShowCoverageRoute(storesInRadius, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
-                        return;
-                    }
-
-                    // Build full store list (including filled ones)
-                    const sortedStores = storesInRadius.sort((a, b) => {
-                        const distA = tempCenterForSelection.distanceTo(a.latlng);
-                        const distB = tempCenterForSelection.distanceTo(b.latlng);
-                        return distA - distB;
                     });
 
-                    let topStores = [...sortedStores];
+                    // Remove selection message
+                    const msg = document.getElementById('selection-message');
+                    if (msg) msg.remove();
 
-                    if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
-                        const allSorted = [...allStoresInRadius].sort((a, b) => {
+                    // Restore Google Maps button
+                    const googleMapsButton = document.getElementById('googleMapsButton');
+                    if (googleMapsButton) {
+                        googleMapsButton.textContent = '🗺️ Google Maps';
+                        googleMapsButton.style.background = '#2196F3';
+                        googleMapsButton.onclick = openRadiusRouteInGoogleMaps;
+                    }
+
+                    // Check which mode this is
+                    if (tempStoresForSelection && tempStoresForSelection.startPoint && tempStoresForSelection.endPoint) {
+                        // Route mode
+                        const { storesInRoute, startPoint, endPoint } = tempStoresForSelection;
+                        calculateAndShowRouteForNav(store, storesInRoute, startPoint, endPoint);
+                    } else if (tempStoresForSelection && tempStoresForSelection.clusterCenter) {
+                        // Area mode
+                        const { storesInCluster, clusterCenter, clusterIdx, routeMode, fullStoresInCluster } = tempStoresForSelection;
+                        if (routeMode === 'coverage') {
+                            calculateAndShowCoverageRouteForArea(store, fullStoresInCluster || storesInCluster, clusterIdx);
+                            return;
+                        }
+                        calculateAndShowRouteForArea(store, storesInCluster, clusterCenter, clusterIdx);
+                    } else if (tempStoresForSelection && tempCenterForSelection) {
+                        // Radius mode
+                        const { storesInRadius, allStoresInRadius, routeMode } = tempStoresForSelection;
+
+                        if (routeMode === 'coverage') {
+                            calculateAndShowCoverageRoute(storesInRadius, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
+                            return;
+                        }
+
+                        // Build full store list (including filled ones)
+                        const sortedStores = storesInRadius.sort((a, b) => {
                             const distA = tempCenterForSelection.distanceTo(a.latlng);
                             const distB = tempCenterForSelection.distanceTo(b.latlng);
                             return distA - distB;
                         });
 
-                        const existingIds = new Set(topStores.map(s => s.id));
-                        for (const s of allSorted) {
-                            if (topStores.length >= 10) break;
-                            if (!existingIds.has(s.id)) {
-                                topStores.push(s);
-                                existingIds.add(s.id);
+                        let topStores = [...sortedStores];
+
+                        if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
+                            const allSorted = [...allStoresInRadius].sort((a, b) => {
+                                const distA = tempCenterForSelection.distanceTo(a.latlng);
+                                const distB = tempCenterForSelection.distanceTo(b.latlng);
+                                return distA - distB;
+                            });
+
+                            const existingIds = new Set(topStores.map(s => s.id));
+                            for (const s of allSorted) {
+                                if (topStores.length >= 10) break;
+                                if (!existingIds.has(s.id)) {
+                                    topStores.push(s);
+                                    existingIds.add(s.id);
+                                }
                             }
                         }
+
+                        topStores = topStores.slice(0, 10);
+
+                        // Calculate route with selected store as start
+                        calculateAndShowRoute(topStores, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
                     }
-
-                    topStores = topStores.slice(0, 10);
-
-                    // Calculate route with selected store as start
-                    calculateAndShowRoute(topStores, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
-                }
+                }, () => {
+                    // User cancelled - stay in selection mode, do nothing
+                });
             }
         }
 
