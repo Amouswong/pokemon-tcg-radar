@@ -11,15 +11,16 @@ build/
 # Scripts and logs
 *.log
 *.pid
-*.sh
-*.py
-*.md
 *.txt
+upload_to_supabase.py
+clean_stores.py
+enable_rls.sql
 
 # Backups and checkpoints
 checkpoint_*.json
 stores_*.json
-!stores.json
+stores.json
+stores_clean.json
 *.bak.*
 *_backup_*.json
 
