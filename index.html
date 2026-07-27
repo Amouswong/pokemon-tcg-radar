@@ -1,4 +1,14 @@
 <!DOCTYPE html>
+<!--
+    Pokemon TCG Radar - 寶可夢卡牌搜尋雷達
+    Copyright (c) 2026 Amous Wong
+
+    此程式碼受版權保護。未經許可，禁止複製、修改或再發佈。
+    This code is protected by copyright. Unauthorized copying, modification,
+    or redistribution is prohibited.
+
+    Project: https://github.com/Amouswong/pokemon-tcg-radar
+-->
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
@@ -687,7 +697,67 @@
         let CITY_CENTERS = {};
 
         // Get prefecture by coordinates
-        function getPrefecture(lat, lon) {
+        function getPrefecture(lat, lon, address) {
+            // First try to get prefecture from address (more accurate)
+            if (address) {
+                const prefectureMap = {
+                    'Hokkaido': '北海道',
+                    'Aomori': '青森県',
+                    'Iwate': '岩手県',
+                    'Miyagi': '宮城県',
+                    'Akita': '秋田県',
+                    'Yamagata': '山形県',
+                    'Fukushima': '福島県',
+                    'Ibaraki': '茨城県',
+                    'Tochigi': '栃木県',
+                    'Gunma': '群馬県',
+                    'Saitama': '埼玉県',
+                    'Chiba': '千葉県',
+                    'Tokyo': '東京都',
+                    'Kanagawa': '神奈川県',
+                    'Niigata': '新潟県',
+                    'Toyama': '富山県',
+                    'Ishikawa': '石川県',
+                    'Fukui': '福井県',
+                    'Yamanashi': '山梨県',
+                    'Nagano': '長野県',
+                    'Gifu': '岐阜県',
+                    'Shizuoka': '静岡県',
+                    'Aichi': '愛知県',
+                    'Mie': '三重県',
+                    'Shiga': '滋賀県',
+                    'Kyoto': '京都府',
+                    'Osaka': '大阪府',
+                    'Hyogo': '兵庫県',
+                    'Nara': '奈良県',
+                    'Wakayama': '和歌山県',
+                    'Tottori': '鳥取県',
+                    'Shimane': '島根県',
+                    'Okayama': '岡山県',
+                    'Hiroshima': '広島県',
+                    'Yamaguchi': '山口県',
+                    'Tokushima': '徳島県',
+                    'Kagawa': '香川県',
+                    'Ehime': '愛媛県',
+                    'Kochi': '高知県',
+                    'Fukuoka': '福岡県',
+                    'Saga': '佐賀県',
+                    'Nagasaki': '長崎県',
+                    'Kumamoto': '熊本県',
+                    'Oita': '大分県',
+                    'Miyazaki': '宮崎県',
+                    'Kagoshima': '鹿児島県',
+                    'Okinawa': '沖縄県'
+                };
+
+                for (const [eng, jp] of Object.entries(prefectureMap)) {
+                    if (address.includes(eng)) {
+                        return jp;
+                    }
+                }
+            }
+
+            // Fallback to coordinate-based detection
             // 東北 (Tohoku)
             if (lat >= 40.2 && lon >= 140.0 && lon <= 141.5) return '青森県';
             if (lat >= 39.1 && lat < 40.6 && lon >= 139.5 && lon < 140.8) return '秋田県';
@@ -696,7 +766,7 @@
             if (lat >= 37.8 && lat < 39.1 && lon >= 140.5 && lon <= 141.5) return '宮城県';
             if (lat >= 36.8 && lat < 37.8 && lon >= 139.5 && lon <= 141.0) return '福島県';
 
-            // 関東 (Kanto) - 擴大範圍以覆蓋更多店鋪
+            // 関東 (Kanto)
             if (lat >= 35.4 && lat < 36.2 && lon >= 139.3 && lon < 140.0) return '東京都';
             if (lat >= 34.9 && lat < 35.7 && lon >= 138.8 && lon < 139.8) return '神奈川県';
             if (lat >= 34.8 && lat < 36.2 && lon >= 139.7 && lon < 141.0) return '千葉県';
@@ -705,7 +775,7 @@
             if (lat >= 36.1 && lat < 37.1 && lon >= 139.2 && lon < 140.4) return '栃木県';
             if (lat >= 35.9 && lat < 37.0 && lon >= 138.3 && lon < 139.6) return '群馬県';
 
-            // 関西 (Kansai) - 擴大範圍
+            // 関西 (Kansai)
             if (lat >= 34.2 && lat < 35.1 && lon >= 135.0 && lon < 135.9) return '大阪府';
             if (lat >= 34.6 && lat < 35.8 && lon >= 134.9 && lon < 136.1) return '京都府';
             if (lat >= 34.2 && lat < 35.8 && lon >= 134.2 && lon < 135.6) return '兵庫県';
@@ -713,7 +783,7 @@
             if (lat >= 34.7 && lat < 35.6 && lon >= 135.6 && lon < 136.6) return '滋賀県';
             if (lat >= 33.4 && lat < 34.6 && lon >= 134.9 && lon < 136.0) return '和歌山県';
 
-            // 九州 (Kyushu) - 擴大範圍以覆蓋邊界店鋪
+            // 九州 (Kyushu)
             if (lat >= 33.1 && lat < 34.1 && lon >= 129.6 && lon < 131.1) return '福岡県';
             if (lat >= 32.9 && lat < 33.7 && lon >= 129.7 && lon < 130.7) return '佐賀県';
             if (lat >= 32.4 && lat < 33.6 && lon >= 129.0 && lon < 130.3) return '長崎県';
@@ -738,8 +808,8 @@
         }
 
         // Get nearest city by coordinates
-        function getNearestCity(lat, lon) {
-            const pref = getPrefecture(lat, lon);
+        function getNearestCity(lat, lon, address) {
+            const pref = getPrefecture(lat, lon, address);
             if (!pref || !CITY_CENTERS[pref]) return null;
 
             let nearestCity = null;
@@ -852,14 +922,38 @@
         // ==================== Data Loading ====================
         async function loadData() {
             try {
-                // Load stores
-                const storesResponse = await fetch('stores.json');
+                // Load stores from Supabase
+                console.log('Loading stores from Supabase...');
+                const SUPABASE_URL = 'https://mtljrpvfcbftgzblnidi.supabase.co';
+                const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bGpycHZmY2JmdGd6YmxuaWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDQ1ODUsImV4cCI6MjEwMDY4MDU4NX0.ObBvnot5xwL6Wxbe6Hn-XF5xIGm-DccL3e_YZJa7c2A';
+
+                const storesResponse = await fetch(`${SUPABASE_URL}/rest/v1/stores?select=*`, {
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
+                });
+
                 if (storesResponse.ok) {
                     allStores = await storesResponse.json();
-                    console.log(`Loaded ${allStores.length} stores`);
+                    console.log(`✅ Loaded ${allStores.length} stores from Supabase`);
+
+                    // Show success message to user
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 12px 24px; border-radius: 6px; z-index: 9999; font-size: 14px;';
+                    loadingMsg.textContent = `✓ 已載入 ${allStores.length.toLocaleString()} 間便利店`;
+                    document.body.appendChild(loadingMsg);
+                    setTimeout(() => loadingMsg.remove(), 3000);
                 } else {
-                    console.warn('stores.json not found, using empty array');
+                    console.error('Failed to load stores from Supabase:', storesResponse.status);
                     allStores = [];
+
+                    // Show error message
+                    const errorMsg = document.createElement('div');
+                    errorMsg.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #f44336; color: white; padding: 12px 24px; border-radius: 6px; z-index: 9999; font-size: 14px;';
+                    errorMsg.textContent = '✗ 無法載入店舖資料';
+                    document.body.appendChild(errorMsg);
+                    setTimeout(() => errorMsg.remove(), 5000);
                 }
 
                 // Load gyms
@@ -934,21 +1028,39 @@
             const filters = getFilters();
             const zoom = map.getZoom();
 
-            // Dynamic clustering radius based on zoom level
-            // Zoom 5-6: 50km, Zoom 7-8: 25km, Zoom 9-10: 10km, Zoom 11-12: 5km, Zoom 13: 2km, Zoom 14+: 1km
+            // Mobile optimization: increase cluster radius and minimum zoom
+            // This reduces the number of markers on screen for better performance
             let clusterRadius;
-            if (zoom <= 6) {
-                clusterRadius = 50000; // 50km
-            } else if (zoom <= 8) {
-                clusterRadius = 25000; // 25km
-            } else if (zoom <= 10) {
-                clusterRadius = 10000; // 10km
-            } else if (zoom <= 12) {
-                clusterRadius = 5000; // 5km
-            } else if (zoom <= 13) {
-                clusterRadius = 2000; // 2km
+            if (IS_MOBILE) {
+                // Mobile: More aggressive clustering
+                if (zoom <= 8) {
+                    clusterRadius = 50000; // 50km
+                } else if (zoom <= 10) {
+                    clusterRadius = 25000; // 25km
+                } else if (zoom <= 12) {
+                    clusterRadius = 10000; // 10km
+                } else if (zoom <= 13) {
+                    clusterRadius = 5000; // 5km
+                } else if (zoom <= 14) {
+                    clusterRadius = 2000; // 2km
+                } else {
+                    clusterRadius = 1000; // 1km
+                }
             } else {
-                clusterRadius = 1000; // 1km
+                // Desktop: Normal clustering
+                if (zoom <= 6) {
+                    clusterRadius = 50000; // 50km
+                } else if (zoom <= 8) {
+                    clusterRadius = 25000; // 25km
+                } else if (zoom <= 10) {
+                    clusterRadius = 10000; // 10km
+                } else if (zoom <= 12) {
+                    clusterRadius = 5000; // 5km
+                } else if (zoom <= 13) {
+                    clusterRadius = 2000; // 2km
+                } else {
+                    clusterRadius = 1000; // 1km
+                }
             }
 
             // Collect stores to display
@@ -962,23 +1074,50 @@
                 });
             }
 
-            // Prefecture-level view for zoom <= 8
-            if (zoom <= 8) {
+            // Mobile: Only show region/prefecture/city views, skip individual stores until zoom 12+
+            const minIndividualZoom = IS_MOBILE ? 12 : 11;
+
+            // Region-level view for zoom <= 7 (show regions like Kyushu, Kansai)
+            if (zoom <= 7) {
+                renderRegionView(storesToDisplay, filters);
+                return;
+            }
+
+            // Prefecture-level view for zoom 8
+            if (zoom === 8) {
                 renderPrefectureView(storesToDisplay, filters);
                 return;
             }
 
-            // City-level view for zoom 9-10
-            if (zoom >= 9 && zoom <= 10 && Object.keys(CITY_CENTERS).length > 0) {
+            // City-level view for zoom 9-10 (mobile: 9-11)
+            const maxCityZoom = IS_MOBILE ? 11 : 10;
+            if (zoom >= 9 && zoom <= maxCityZoom && Object.keys(CITY_CENTERS).length > 0) {
                 renderCityView(storesToDisplay, filters);
                 return;
+            }
+
+            // Skip individual stores on mobile until zoom 12+
+            if (IS_MOBILE && zoom < minIndividualZoom) {
+                return; // Show nothing, wait for user to zoom in more
             }
 
             // Grid-based clustering for performance (zoom >= 11)
             const gridSize = clusterRadius / 111000; // Approximate degrees
             const grid = new Map();
 
-            storesToDisplay.forEach(store => {
+            // Mobile optimization: Only process stores within visible bounds + buffer
+            const bounds = map.getBounds();
+            const buffer = IS_MOBILE ? 0.1 : 0.5; // Smaller buffer on mobile
+            const filteredStores = IS_MOBILE ? storesToDisplay.filter(store => {
+                const lat = store.latitude;
+                const lon = store.longitude;
+                return lat >= bounds.getSouth() - buffer &&
+                       lat <= bounds.getNorth() + buffer &&
+                       lon >= bounds.getWest() - buffer &&
+                       lon <= bounds.getEast() + buffer;
+            }) : storesToDisplay;
+
+            filteredStores.forEach(store => {
                 const gridX = Math.floor(store.latitude / gridSize);
                 const gridY = Math.floor(store.longitude / gridSize);
                 const key = `${gridX},${gridY}`;
@@ -989,8 +1128,17 @@
                 grid.get(key).push(store);
             });
 
+            // Mobile: Limit total markers to prevent performance issues
+            const maxMarkers = IS_MOBILE ? 200 : 1000;
+            let markerCount = 0;
+
             // Render each grid cell
             grid.forEach((stores) => {
+                // Mobile: Stop rendering if max markers reached
+                if (IS_MOBILE && markerCount >= maxMarkers) {
+                    return;
+                }
+
                 if (stores.length === 1 && !IS_MOBILE) {
                     // Single store (desktop: show the actual brand icon)
                     const store = stores[0];
@@ -1011,6 +1159,7 @@
                         .bindPopup(createStorePopup(store));
 
                     storeMarkers.push(marker);
+                    markerCount++;
                 } else if (stores.length === 1 && IS_MOBILE) {
                     // Single store on mobile: lightweight number badge, not the full
                     // brand icon, to cut per-marker DOM/paint cost while scrolling.
@@ -1026,6 +1175,7 @@
                     }).addTo(map).bindPopup(createStorePopup(store));
 
                     storeMarkers.push(marker);
+                    markerCount++;
                 } else {
                     // Cluster
                     const count = stores.length;
@@ -1068,8 +1218,14 @@
                     }).addTo(map).bindPopup(popupHtml);
 
                     storeMarkers.push(marker);
+                    markerCount++;
                 }
             });
+
+            // Show warning if markers were limited on mobile
+            if (IS_MOBILE && markerCount >= maxMarkers) {
+                console.log(`⚠️ Mobile: Limited to ${maxMarkers} markers for performance`);
+            }
 
             // Render gyms (no clustering)
             if (filters.showGyms) {
@@ -1109,14 +1265,160 @@
             }
         }
 
-        // ==================== Prefecture View (Zoom <= 8) ====================
+        // ==================== Region Centers ====================
+        const REGION_CENTERS = {
+            '北海道': { lat: 43.0642, lon: 141.3469, name_en: 'Hokkaido' },
+            '東北': { lat: 38.2682, lon: 140.8694, name_en: 'Tohoku' },
+            '関東': { lat: 35.6762, lon: 139.6503, name_en: 'Kanto' },
+            '中部': { lat: 35.1802, lon: 136.9066, name_en: 'Chubu' },
+            '関西': { lat: 34.6937, lon: 135.5023, name_en: 'Kansai' },
+            '中国': { lat: 34.3963, lon: 132.4596, name_en: 'Chugoku' },
+            '四国': { lat: 33.8416, lon: 133.2821, name_en: 'Shikoku' },
+            '九州': { lat: 32.7503, lon: 130.7081, name_en: 'Kyushu' }
+        };
+
+        const PREFECTURE_TO_REGION = {
+            '北海道': '北海道',
+            '青森県': '東北', '岩手県': '東北', '宮城県': '東北', '秋田県': '東北', '山形県': '東北', '福島県': '東北',
+            '茨城県': '関東', '栃木県': '関東', '群馬県': '関東', '埼玉県': '関東', '千葉県': '関東', '東京都': '関東', '神奈川県': '関東',
+            '新潟県': '中部', '富山県': '中部', '石川県': '中部', '福井県': '中部', '山梨県': '中部', '長野県': '中部',
+            '岐阜県': '中部', '静岡県': '中部', '愛知県': '中部', '三重県': '中部',
+            '滋賀県': '関西', '京都府': '関西', '大阪府': '関西', '兵庫県': '関西', '奈良県': '関西', '和歌山県': '関西',
+            '鳥取県': '中国', '島根県': '中国', '岡山県': '中国', '広島県': '中国', '山口県': '中国',
+            '徳島県': '四国', '香川県': '四国', '愛媛県': '四国', '高知県': '四国',
+            '福岡県': '九州', '佐賀県': '九州', '長崎県': '九州', '熊本県': '九州', '大分県': '九州', '宮崎県': '九州', '鹿児島県': '九州', '沖縄県': '九州'
+        };
+
+        // ==================== Region View (Zoom <= 7) ====================
+        function renderRegionView(storesToDisplay, filters) {
+            const regionCounts = {};
+            const regionBrands = {};
+
+            // Count stores by region
+            storesToDisplay.forEach(store => {
+                const pref = getPrefecture(store.latitude, store.longitude, store.address);
+                if (pref) {
+                    const region = PREFECTURE_TO_REGION[pref];
+                    if (region) {
+                        if (!regionCounts[region]) {
+                            regionCounts[region] = 0;
+                            regionBrands[region] = { '7-Eleven': 0, 'Lawson': 0, 'FamilyMart': 0 };
+                        }
+                        regionCounts[region]++;
+                        if (regionBrands[region][store.brand] !== undefined) {
+                            regionBrands[region][store.brand]++;
+                        }
+                    }
+                }
+            });
+
+            // ---- Phase 1: collect every region that has stores ----
+            const labels = [];
+            Object.keys(REGION_CENTERS).forEach(region => {
+                const count = regionCounts[region] || 0;
+                if (count === 0) return;
+
+                const center = REGION_CENTERS[region];
+                // Calculate pill width based on region name length
+                const halfW = 22 + region.length * 7 + String(count).length * 5;
+                labels.push({
+                    region,
+                    count,
+                    brands: regionBrands[region],
+                    latlng: L.latLng(center.lat, center.lon),
+                    pt: map.latLngToLayerPoint([center.lat, center.lon]),
+                    halfW, halfH: 15
+                });
+            });
+
+            // ---- Phase 2: nudge overlapping labels apart ----
+            for (let iter = 0; iter < 60; iter++) {
+                let moved = false;
+                for (let i = 0; i < labels.length; i++) {
+                    for (let j = i + 1; j < labels.length; j++) {
+                        const a = labels[i], b = labels[j];
+                        const dx = b.pt.x - a.pt.x;
+                        const dy = b.pt.y - a.pt.y;
+                        const overlapX = (a.halfW + b.halfW + 4) - Math.abs(dx);
+                        const overlapY = (a.halfH + b.halfH + 4) - Math.abs(dy);
+                        if (overlapX > 0 && overlapY > 0) {
+                            if (overlapX < overlapY) {
+                                const shift = (overlapX / 2) * (dx < 0 ? -1 : 1);
+                                a.pt.x -= shift; b.pt.x += shift;
+                            } else {
+                                const shift = (overlapY / 2) * (dy < 0 ? -1 : 1);
+                                a.pt.y -= shift; b.pt.y += shift;
+                            }
+                            moved = true;
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+
+            // ---- Phase 3: place the badges (same style as prefecture) ----
+            labels.forEach(item => {
+                const { region, count, brands } = item;
+                const displayLatLng = map.layerPointToLatLng(item.pt);
+
+                // Create popup (same format as prefecture)
+                let popupHtml = `<div style="min-width: 200px;">`;
+                popupHtml += `<div style="font-weight: bold; font-size: 16px; margin-bottom: 8px; color: #667eea;">${region}</div>`;
+                popupHtml += `<div style="font-size: 14px; margin-bottom: 8px;">合共: <strong style="color: #667eea;">${count}</strong> 間</div>`;
+                popupHtml += `<div style="font-size: 12px; color: #666;">`;
+                if (brands['7-Eleven'] > 0) popupHtml += `🟢 7-Eleven: ${brands['7-Eleven']}<br>`;
+                if (brands['Lawson'] > 0) popupHtml += `🔵 Lawson: ${brands['Lawson']}<br>`;
+                if (brands['FamilyMart'] > 0) popupHtml += `🟡 FamilyMart: ${brands['FamilyMart']}<br>`;
+                popupHtml += `</div>`;
+                popupHtml += `<div style="font-size: 11px; color: #999; margin-top: 8px; font-style: italic;">點一下放大</div>`;
+                popupHtml += `</div>`;
+
+                // Pill-shaped badge (same style as prefecture)
+                const iconHtml = `<div style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 5px 10px; border-radius: 16px; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 3px 10px rgba(102, 126, 234, 0.5); cursor: pointer; white-space: nowrap;"><span>${region}</span><span style="background: rgba(255,255,255,0.28); border-radius: 10px; padding: 1px 7px; font-size: 12px;">${count}</span></div>`;
+
+                // Connector from the true centre to the nudged badge
+                const origPt = map.latLngToLayerPoint(item.latlng);
+                const dist = origPt.distanceTo(item.pt);
+                if (dist > 6) {
+                    const connector = L.polyline([item.latlng, displayLatLng], {
+                        color: '#764ba2', weight: 1.5, opacity: 0.5, dashArray: '3, 3'
+                    }).addTo(map);
+                    storeMarkers.push(connector);
+                    const dot = L.circleMarker(item.latlng, {
+                        radius: 3, color: '#764ba2', fillColor: '#764ba2', fillOpacity: 1, weight: 0
+                    }).addTo(map);
+                    storeMarkers.push(dot);
+                }
+
+                const marker = L.marker(displayLatLng, {
+                    icon: L.divIcon({
+                        className: 'region-marker',
+                        html: iconHtml,
+                        iconSize: [item.halfW * 2, 30],
+                        iconAnchor: [item.halfW, 15]
+                    }),
+                    interactive: true
+                }).addTo(map);
+
+                marker.bindPopup(popupHtml);
+
+                // Click to zoom into region
+                marker.on('click', () => {
+                    map.setView([item.latlng.lat, item.latlng.lng], 8);
+                });
+
+                storeMarkers.push(marker);
+            });
+        }
+
+        // ==================== Prefecture View (Zoom 7-8) ====================
         function renderPrefectureView(storesToDisplay, filters) {
             const prefectureCounts = {};
             const prefectureBrands = {};
 
             // Count stores by prefecture
             storesToDisplay.forEach(store => {
-                const pref = getPrefecture(store.latitude, store.longitude);
+                const pref = getPrefecture(store.latitude, store.longitude, store.address);
                 if (pref) {
                     if (!prefectureCounts[pref]) {
                         prefectureCounts[pref] = 0;
@@ -1247,10 +1549,10 @@
 
             // Count stores by city (using nearest city based on coordinates)
             storesToDisplay.forEach(store => {
-                const pref = getPrefecture(store.latitude, store.longitude);
+                const pref = getPrefecture(store.latitude, store.longitude, store.address);
                 if (!pref || !CITY_CENTERS[pref]) return;
 
-                const cityName = getNearestCity(store.latitude, store.longitude);
+                const cityName = getNearestCity(store.latitude, store.longitude, store.address);
                 if (cityName && CITY_CENTERS[pref][cityName]) {
                     const key = `${pref}_${cityName}`;
                     if (!cityCounts[key]) {
@@ -1812,7 +2114,7 @@
             // Add Google Maps button for radius search mode
             document.getElementById('radiusButtons').innerHTML = `
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button onclick="openRadiusRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                    <button id="googleMapsButton" onclick="openRadiusRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
                     <button onclick="clearSearchArea()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
                 </div>
             `;
@@ -1976,6 +2278,14 @@
             console.log('allStoresInRadius count:', allStoresInRadius.length);
             console.log('isSelectingStartStore set to:', isSelectingStartStore);
 
+            // Update Google Maps button to Cancel button
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '✕ 取消 Google Maps 導航';
+                googleMapsButton.style.background = '#f44336';
+                googleMapsButton.onclick = cancelGoogleMapsNavigation;
+            }
+
             // Re-render ALL stores with visual distinction for preferred brands
             storeMarkers.forEach(marker => map.removeLayer(marker));
             storeMarkers = [];
@@ -1988,7 +2298,7 @@
 
                 const icon = L.divIcon({
                     className: 'marker-icon',
-                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.5'}; filter: ${isPreferred ? 'none' : 'grayscale(70%)'}; cursor: pointer;">${brandIcon}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -2018,7 +2328,7 @@
             const message = document.createElement('div');
             message.id = 'selection-message';
             message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
-            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點<br><small style="font-size: 12px; opacity: 0.9;">※ 光亮圖示＝你揀嘅品牌 / 淺色圖示＝其他品牌（不足 10 間時補上）</small>';
+            message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點<br><small style="font-size: 12px; opacity: 0.9;">※ 光亮圖示＝你揀嘅品牌 / 淺色圖示＝其他品牌（全部都可以揀）</small>';
             document.body.appendChild(message);
 
             console.log('Selection mode activated - all stores rendered');
@@ -2032,6 +2342,41 @@
                 }
             }, 7000);
         }
+
+        // Cancel Google Maps navigation mode
+        function cancelGoogleMapsNavigation() {
+            // Clear selection mode
+            startStoreSelectionMode = false;
+            isSelectingStartStore = false;
+            tempStoresForSelection = null;
+            tempCenterForSelection = null;
+
+            // Remove pulsing effect from all markers
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker && layer.storeData) {
+                    const element = layer.getElement();
+                    if (element) {
+                        element.style.animation = '';
+                    }
+                }
+            });
+
+            // Remove selection message
+            const msg = document.getElementById('selection-message');
+            if (msg) msg.remove();
+
+            // Restore Google Maps button
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '🗺️ Google Maps';
+                googleMapsButton.style.background = '#2196F3';
+                googleMapsButton.onclick = openRadiusRouteInGoogleMaps;
+            }
+
+            // Re-render markers in normal mode
+            renderMarkers();
+        }
+        window.cancelGoogleMapsNavigation = cancelGoogleMapsNavigation;
 
         // Render stores for route selection mode
         function renderStoresForRouteSelection(storesInRoute, allStoresInRoute) {
@@ -2249,79 +2594,104 @@
         // Handle store marker click for start point selection
         function handleStoreMarkerClick(marker, store) {
             if (startStoreSelectionMode) {
-                startStoreSelectionMode = false;
-                isSelectingStartStore = false; // Clear flag
+                // Show confirmation popup for the selected store
+                const preferredIds = new Set(tempStoresForSelection.storesInRadius.map(s => s.id));
+                const isPreferred = preferredIds.has(store.id);
+                const brandIcon = BRAND_ICONS[store.brand] || '🏪';
 
-                // Remove pulsing effect from all markers
-                map.eachLayer(function(layer) {
-                    if (layer instanceof L.Marker && layer.storeData) {
-                        const element = layer.getElement();
-                        if (element) {
-                            element.style.animation = '';
+                const confirmHtml = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 32px; margin-bottom: 8px;">${brandIcon}</div>
+                        <div style="font-weight: bold; margin-bottom: 4px;">${store.brand}</div>
+                        <div style="font-size: 13px; color: #666; margin-bottom: 12px;">${store.name || ''}</div>
+                        ${isPreferred ? '' : '<div style="font-size: 12px; color: #f57c00; margin-bottom: 12px;">（其他品牌）</div>'}
+                        <div style="font-size: 13px;">確定以呢間店舖為起點？</div>
+                    </div>
+                `;
+
+                showCustomConfirm('確認起點', confirmHtml, () => {
+                    // User confirmed - now exit selection mode
+                    startStoreSelectionMode = false;
+                    isSelectingStartStore = false;
+
+                    // Remove pulsing effect from all markers
+                    map.eachLayer(function(layer) {
+                        if (layer instanceof L.Marker && layer.storeData) {
+                            const element = layer.getElement();
+                            if (element) {
+                                element.style.animation = '';
+                            }
                         }
-                    }
-                });
-
-                // Remove selection message
-                const msg = document.getElementById('selection-message');
-                if (msg) msg.remove();
-
-                // Check which mode this is
-                if (tempStoresForSelection && tempStoresForSelection.startPoint && tempStoresForSelection.endPoint) {
-                    // Route mode
-                    const { storesInRoute, startPoint, endPoint } = tempStoresForSelection;
-                    calculateAndShowRouteForNav(store, storesInRoute, startPoint, endPoint);
-                } else if (tempStoresForSelection && tempStoresForSelection.clusterCenter) {
-                    // Area mode
-                    const { storesInCluster, clusterCenter, clusterIdx, routeMode, fullStoresInCluster } = tempStoresForSelection;
-                    if (routeMode === 'coverage') {
-                        calculateAndShowCoverageRouteForArea(store, fullStoresInCluster || storesInCluster, clusterIdx);
-                        return;
-                    }
-                    calculateAndShowRouteForArea(store, storesInCluster, clusterCenter, clusterIdx);
-                } else if (tempStoresForSelection && tempCenterForSelection) {
-                    // Radius mode
-                    const { storesInRadius, allStoresInRadius, routeMode } = tempStoresForSelection;
-
-                    if (routeMode === 'coverage') {
-                        // "Pass by as many stores as possible" mode: use ALL matching
-                        // stores in radius (not capped at 10), then thin the TSP path
-                        // down to <=9 pin stops via Douglas-Peucker simplification.
-                        calculateAndShowCoverageRoute(storesInRadius, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
-                        return;
-                    }
-
-                    // Build full store list (including filled ones)
-                    const sortedStores = storesInRadius.sort((a, b) => {
-                        const distA = tempCenterForSelection.distanceTo(a.latlng);
-                        const distB = tempCenterForSelection.distanceTo(b.latlng);
-                        return distA - distB;
                     });
 
-                    let topStores = [...sortedStores];
+                    // Remove selection message
+                    const msg = document.getElementById('selection-message');
+                    if (msg) msg.remove();
 
-                    if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
-                        const allSorted = [...allStoresInRadius].sort((a, b) => {
+                    // Restore Google Maps button
+                    const googleMapsButton = document.getElementById('googleMapsButton');
+                    if (googleMapsButton) {
+                        googleMapsButton.textContent = '🗺️ Google Maps';
+                        googleMapsButton.style.background = '#2196F3';
+                        googleMapsButton.onclick = openRadiusRouteInGoogleMaps;
+                    }
+
+                    // Check which mode this is
+                    if (tempStoresForSelection && tempStoresForSelection.startPoint && tempStoresForSelection.endPoint) {
+                        // Route mode
+                        const { storesInRoute, startPoint, endPoint } = tempStoresForSelection;
+                        calculateAndShowRouteForNav(store, storesInRoute, startPoint, endPoint);
+                    } else if (tempStoresForSelection && tempStoresForSelection.clusterCenter) {
+                        // Area mode
+                        const { storesInCluster, clusterCenter, clusterIdx, routeMode, fullStoresInCluster } = tempStoresForSelection;
+                        if (routeMode === 'coverage') {
+                            calculateAndShowCoverageRouteForArea(store, fullStoresInCluster || storesInCluster, clusterIdx);
+                            return;
+                        }
+                        calculateAndShowRouteForArea(store, storesInCluster, clusterCenter, clusterIdx);
+                    } else if (tempStoresForSelection && tempCenterForSelection) {
+                        // Radius mode
+                        const { storesInRadius, allStoresInRadius, routeMode } = tempStoresForSelection;
+
+                        if (routeMode === 'coverage') {
+                            calculateAndShowCoverageRoute(storesInRadius, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
+                            return;
+                        }
+
+                        // Build full store list (including filled ones)
+                        const sortedStores = storesInRadius.sort((a, b) => {
                             const distA = tempCenterForSelection.distanceTo(a.latlng);
                             const distB = tempCenterForSelection.distanceTo(b.latlng);
                             return distA - distB;
                         });
 
-                        const existingIds = new Set(topStores.map(s => s.id));
-                        for (const s of allSorted) {
-                            if (topStores.length >= 10) break;
-                            if (!existingIds.has(s.id)) {
-                                topStores.push(s);
-                                existingIds.add(s.id);
+                        let topStores = [...sortedStores];
+
+                        if (topStores.length < 10 && allStoresInRadius && allStoresInRadius.length > 0) {
+                            const allSorted = [...allStoresInRadius].sort((a, b) => {
+                                const distA = tempCenterForSelection.distanceTo(a.latlng);
+                                const distB = tempCenterForSelection.distanceTo(b.latlng);
+                                return distA - distB;
+                            });
+
+                            const existingIds = new Set(topStores.map(s => s.id));
+                            for (const s of allSorted) {
+                                if (topStores.length >= 10) break;
+                                if (!existingIds.has(s.id)) {
+                                    topStores.push(s);
+                                    existingIds.add(s.id);
+                                }
                             }
                         }
+
+                        topStores = topStores.slice(0, 10);
+
+                        // Calculate route with selected store as start
+                        calculateAndShowRoute(topStores, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
                     }
-
-                    topStores = topStores.slice(0, 10);
-
-                    // Calculate route with selected store as start
-                    calculateAndShowRoute(topStores, L.latLng(store.latitude, store.longitude), tempCenterForSelection);
-                }
+                }, () => {
+                    // User cancelled - stay in selection mode, do nothing
+                });
             }
         }
 
@@ -4513,5 +4883,10 @@
         // ==================== Start Application ====================
         init();
     </script>
+
+    <!-- Copyright Notice -->
+    <div style="position: fixed; bottom: 5px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 4px 10px; border-radius: 4px; font-size: 10px; z-index: 9999; pointer-events: none;">
+        © 2026 Amous Wong
+    </div>
 </body>
 </html>
