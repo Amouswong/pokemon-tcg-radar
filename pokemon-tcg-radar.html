@@ -3088,9 +3088,25 @@
                     }
                 },
                 () => {
-                    // User cancelled - return to store selection mode
-                    const allStoresInRoute = tempStoresForSelection ? tempStoresForSelection.allStoresInRoute : null;
-                    directMapSelectionForRoute(storesInRoute, startPoint, endPoint, allStoresInRoute || storesInRoute);
+                    // User cancelled - return to store selection mode WITHOUT resetting everything
+                    startStoreSelectionMode = true;
+                    isSelectingStartStore = true;
+
+                    // Show selection message again
+                    const message = document.createElement('div');
+                    message.id = 'selection-message';
+                    message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+                    message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點';
+                    document.body.appendChild(message);
+
+                    // Remove message after 5 seconds
+                    setTimeout(() => {
+                        const msg = document.getElementById('selection-message');
+                        if (msg) {
+                            msg.style.animation = 'fadeOut 0.3s';
+                            setTimeout(() => msg.remove(), 300);
+                        }
+                    }, 5000);
                 }
             );
         }
