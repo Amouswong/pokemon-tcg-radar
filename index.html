@@ -3089,6 +3089,7 @@
                 },
                 () => {
                     // User cancelled - return to store selection mode
+                    const allStoresInRoute = tempStoresForSelection ? tempStoresForSelection.allStoresInRoute : null;
                     directMapSelectionForRoute(storesInRoute, startPoint, endPoint, allStoresInRoute || storesInRoute);
                 }
             );
