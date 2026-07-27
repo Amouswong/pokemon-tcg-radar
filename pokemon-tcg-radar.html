@@ -922,22 +922,42 @@
         // ==================== Data Loading ====================
         async function loadData() {
             try {
-                // Load stores from Supabase
+                // Load stores from Supabase (with pagination to get all data)
                 console.log('Loading stores from Supabase...');
                 const SUPABASE_URL = 'https://mtljrpvfcbftgzblnidi.supabase.co';
                 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bGpycHZmY2JmdGd6YmxuaWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDQ1ODUsImV4cCI6MjEwMDY4MDU4NX0.ObBvnot5xwL6Wxbe6Hn-XF5xIGm-DccL3e_YZJa7c2A';
 
-                // Fetch all stores (Supabase default limit is 1000, we need to override it)
-                const storesResponse = await fetch(`${SUPABASE_URL}/rest/v1/stores?select=*&limit=50000`, {
-                    headers: {
-                        'apikey': SUPABASE_KEY,
-                        'Authorization': `Bearer ${SUPABASE_KEY}`,
-                        'Range': '0-50000'
-                    }
-                });
+                // Fetch all stores using pagination (Supabase max is 1000 per request)
+                allStores = [];
+                const BATCH_SIZE = 1000;
+                let offset = 0;
+                let hasMore = true;
 
-                if (storesResponse.ok) {
-                    allStores = await storesResponse.json();
+                while (hasMore) {
+                    const storesResponse = await fetch(`${SUPABASE_URL}/rest/v1/stores?select=*&limit=${BATCH_SIZE}&offset=${offset}`, {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    });
+
+                    if (storesResponse.ok) {
+                        const batch = await storesResponse.json();
+                        allStores = allStores.concat(batch);
+                        console.log(`Loaded ${allStores.length} stores so far...`);
+
+                        if (batch.length < BATCH_SIZE) {
+                            hasMore = false; // Last batch
+                        } else {
+                            offset += BATCH_SIZE;
+                        }
+                    } else {
+                        console.error('Failed to load stores from Supabase:', storesResponse.status);
+                        hasMore = false;
+                    }
+                }
+
+                if (allStores.length > 0) {
                     console.log(`✅ Loaded ${allStores.length} stores from Supabase`);
 
                     // Show success message to user
@@ -947,8 +967,7 @@
                     document.body.appendChild(loadingMsg);
                     setTimeout(() => loadingMsg.remove(), 3000);
                 } else {
-                    console.error('Failed to load stores from Supabase:', storesResponse.status);
-                    allStores = [];
+                    console.error('No stores loaded from Supabase');
 
                     // Show error message
                     const errorMsg = document.createElement('div');
