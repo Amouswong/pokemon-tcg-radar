@@ -927,10 +927,12 @@
                 const SUPABASE_URL = 'https://mtljrpvfcbftgzblnidi.supabase.co';
                 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10bGpycHZmY2JmdGd6YmxuaWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDQ1ODUsImV4cCI6MjEwMDY4MDU4NX0.ObBvnot5xwL6Wxbe6Hn-XF5xIGm-DccL3e_YZJa7c2A';
 
-                const storesResponse = await fetch(`${SUPABASE_URL}/rest/v1/stores?select=*`, {
+                // Fetch all stores (Supabase default limit is 1000, we need to override it)
+                const storesResponse = await fetch(`${SUPABASE_URL}/rest/v1/stores?select=*&limit=50000`, {
                     headers: {
                         'apikey': SUPABASE_KEY,
-                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                        'Range': '0-50000'
                     }
                 });
 
