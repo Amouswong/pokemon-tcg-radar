@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>便利店覆蓋率報告</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .summary {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .summary h2 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-box {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1976d2;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #1976d2;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .coverage-bar {
+            width: 100%;
+            height: 25px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .coverage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .coverage-low { background: linear-gradient(90deg, #f44336, #e57373) !important; }
+        .coverage-medium { background: linear-gradient(90deg, #ff9800, #ffb74d) !important; }
+        .coverage-high { background: linear-gradient(90deg, #4caf50, #81c784) !important; }
+        .brand-split {
+            display: flex;
+            gap: 10px;
+            font-size: 12px;
+        }
+        .brand-item {
+            background: #f5f5f5;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+        .region-header {
+            background: #e8f5e9;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .filter-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗾 日本便利店覆蓋率報告</h1>
+        <p style="color: #666;">基於 Google Places API 數據 vs 預期店鋪數</p>
+
+        <div class="summary" id="summary">
+            <h2>總覽</h2>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="totalStores">-</div>
+                    <div class="stat-label">實際店鋪數</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="expectedStores">-</div>
+                    <div class="stat-label">預期店鋪數</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="overallCoverage">-</div>
+                    <div class="stat-label">整體覆蓋率</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="prefectureCount">-</div>
+                    <div class="stat-label">都道府縣數</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <button onclick="sortTable('prefecture')">按名稱排序</button>
+            <button onclick="sortTable('coverage')">按覆蓋率排序</button>
+            <button onclick="sortTable('actual')">按實際數排序</button>
+            <button onclick="sortTable('gap')">按缺口排序</button>
+        </div>
+
+        <div id="loading" class="loading">正在載入資料...</div>
+        <table id="coverageTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>地區</th>
+                    <th>都道府縣</th>
+                    <th>實際店鋪數</th>
+                    <th>預期店鋪數</th>
+                    <th>覆蓋率</th>
+                    <th>缺口</th>
+                    <th>品牌分佈</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Expected store counts by prefecture (3 major brands only: 7-11 + FM + Lawson)
+        // Source: User's official data
+        const expectedCounts = {
+            '北海道': 1921,      // 7-11:1000 + FM:238 + Lawson:683
+            '青森県': 572,       // 7-11:103 + FM:192 + Lawson:277
+            '岩手県': 513,       // 7-11:152 + FM:182 + Lawson:179
+            '宮城県': 1026,      // 7-11:430 + FM:337 + Lawson:259
+            '秋田県': 429,       // 7-11:114 + FM:138 + Lawson:177
+            '山形県': 433,       // 7-11:186 + FM:139 + Lawson:108
+            '福島県': 797,       // 7-11:451 + FM:178 + Lawson:168
+            '茨城県': 1180,      // 7-11:642 + FM:325 + Lawson:213
+            '栃木県': 886,       // 7-11:466 + FM:223 + Lawson:197
+            '群馬県': 832,       // 7-11:476 + FM:116 + Lawson:240
+            '埼玉県': 2702,      // 7-11:1231 + FM:779 + Lawson:692
+            '千葉県': 2395,      // 7-11:1160 + FM:637 + Lawson:598
+            '東京都': 6954,      // 7-11:2878 + FM:2418 + Lawson:1658
+            '神奈川県': 3543,    // 7-11:1492 + FM:990 + Lawson:1061
+            '新潟県': 828,       // 7-11:431 + FM:173 + Lawson:224
+            '富山県': 461,       // 7-11:133 + FM:153 + Lawson:175
+            '石川県': 485,       // 7-11:135 + FM:248 + Lawson:102
+            '福井県': 324,       // 7-11:70 + FM:150 + Lawson:104
+            '山梨県': 421,       // 7-11:205 + FM:82 + Lawson:134
+            '長野県': 890,       // 7-11:459 + FM:264 + Lawson:167
+            '岐阜県': 720,       // 7-11:193 + FM:350 + Lawson:177
+            '静岡県': 1520,      // 7-11:748 + FM:498 + Lawson:274
+            '愛知県': 3372,      // 7-11:1059 + FM:1599 + Lawson:714
+            '三重県': 703,       // 7-11:175 + FM:393 + Lawson:135
+            '滋賀県': 532,       // 7-11:224 + FM:154 + Lawson:154
+            '京都府': 1012,      // 7-11:353 + FM:335 + Lawson:324
+            '大阪府': 3856,      // 7-11:1292 + FM:1367 + Lawson:1197
+            '兵庫県': 1917,      // 7-11:694 + FM:526 + Lawson:697
+            '奈良県': 422,       // 7-11:137 + FM:151 + Lawson:134
+            '和歌山県': 353,     // 7-11:88 + FM:113 + Lawson:152
+            '鳥取県': 258,       // 7-11:49 + FM:72 + Lawson:137
+            '島根県': 268,       // 7-11:64 + FM:64 + Lawson:140
+            '岡山県': 797,       // 7-11:319 + FM:234 + Lawson:244
+            '広島県': 1166,      // 7-11:599 + FM:268 + Lawson:299
+            '山口県': 544,       // 7-11:326 + FM:91 + Lawson:127
+            '徳島県': 300,       // 7-11:82 + FM:83 + Lawson:135
+            '香川県': 356,       // 7-11:107 + FM:118 + Lawson:131
+            '愛媛県': 568,       // 7-11:124 + FM:227 + Lawson:217
+            '高知県': 288,       // 7-11:47 + FM:103 + Lawson:138
+            '福岡県': 2091,      // 7-11:1041 + FM:529 + Lawson:521
+            '佐賀県': 341,       // 7-11:189 + FM:75 + Lawson:77
+            '長崎県': 480,       // 7-11:205 + FM:154 + Lawson:121
+            '熊本県': 722,       // 7-11:361 + FM:198 + Lawson:163
+            '大分県': 505,       // 7-11:182 + FM:121 + Lawson:202
+            '宮崎県': 439,       // 7-11:200 + FM:129 + Lawson:110
+            '鹿児島県': 671,     // 7-11:208 + FM:263 + Lawson:200
+            '沖縄県': 749        // 7-11:157 + FM:334 + Lawson:258
+        };
+        // Total expected: 52,542 stores (7-11:21,437 + FM:16,511 + Lawson:14,594)
+
+        const regionMap = {
+            '北海道': '北海道',
+            '青森県': '東北', '岩手県': '東北', '宮城県': '東北', '秋田県': '東北', '山形県': '東北', '福島県': '東北',
+            '茨城県': '関東', '栃木県': '関東', '群馬県': '関東', '埼玉県': '関東', '千葉県': '関東', '東京都': '関東', '神奈川県': '関東',
+            '新潟県': '中部', '富山県': '中部', '石川県': '中部', '福井県': '中部', '山梨県': '中部', '長野県': '中部',
+            '岐阜県': '中部', '静岡県': '中部', '愛知県': '中部', '三重県': '中部',
+            '滋賀県': '関西', '京都府': '関西', '大阪府': '関西', '兵庫県': '関西', '奈良県': '関西', '和歌山県': '関西',
+            '鳥取県': '中国', '島根県': '中国', '岡山県': '中国', '広島県': '中国', '山口県': '中国',
+            '徳島県': '四国', '香川県': '四国', '愛媛県': '四国', '高知県': '四国',
+            '福岡県': '九州', '佐賀県': '九州', '長崎県': '九州', '熊本県': '九州',
+            '大分県': '九州', '宮崎県': '九州', '鹿児島県': '九州', '沖縄県': '九州'
+        };
+
+        let tableData = [];
+        let currentSort = { column: null, ascending: true };
+
+        async function loadData() {
+            try {
+                const response = await fetch('stores.json?t=' + Date.now());
+                const stores = await response.json();
+
+                // Count stores by prefecture
+                const prefectureCounts = {};
+                const prefectureBrands = {};
+
+                const prefectureMap = {
+                    'Hokkaido': '北海道',
+                    'Aomori': '青森県', 'Iwate': '岩手県', 'Miyagi': '宮城県',
+                    'Akita': '秋田県', 'Yamagata': '山形県', 'Fukushima': '福島県',
+                    'Ibaraki': '茨城県', 'Tochigi': '栃木県', 'Gunma': '群馬県',
+                    'Saitama': '埼玉県', 'Chiba': '千葉県', 'Tokyo': '東京都', 'Kanagawa': '神奈川県',
+                    'Niigata': '新潟県', 'Toyama': '富山県', 'Ishikawa': '石川県', 'Fukui': '福井県',
+                    'Yamanashi': '山梨県', 'Nagano': '長野県',
+                    'Gifu': '岐阜県', 'Shizuoka': '静岡県', 'Aichi': '愛知県', 'Mie': '三重県',
+                    'Shiga': '滋賀県', 'Kyoto': '京都府', 'Osaka': '大阪府', 'Hyogo': '兵庫県',
+                    'Nara': '奈良県', 'Wakayama': '和歌山県',
+                    'Tottori': '鳥取県', 'Shimane': '島根県', 'Okayama': '岡山県',
+                    'Hiroshima': '広島県', 'Yamaguchi': '山口県',
+                    'Tokushima': '徳島県', 'Kagawa': '香川県', 'Ehime': '愛媛県', 'Kochi': '高知県',
+                    'Fukuoka': '福岡県', 'Saga': '佐賀県', 'Nagasaki': '長崎県', 'Kumamoto': '熊本県',
+                    'Oita': '大分県', 'Miyazaki': '宮崎県', 'Kagoshima': '鹿児島県', 'Okinawa': '沖縄県'
+                };
+
+                stores.forEach(store => {
+                    const address = store.address || '';
+                    let pref = null;
+
+                    for (const [eng, jp] of Object.entries(prefectureMap)) {
+                        if (address.includes(eng)) {
+                            pref = jp;
+                            break;
+                        }
+                    }
+
+                    if (pref) {
+                        prefectureCounts[pref] = (prefectureCounts[pref] || 0) + 1;
+                        if (!prefectureBrands[pref]) {
+                            prefectureBrands[pref] = { '7-Eleven': 0, 'FamilyMart': 0, 'Lawson': 0 };
+                        }
+                        if (prefectureBrands[pref][store.brand] !== undefined) {
+                            prefectureBrands[pref][store.brand]++;
+                        }
+                    }
+                });
+
+                // Build table data
+                tableData = [];
+                let totalActual = 0;
+                let totalExpected = 0;
+
+                for (const [pref, expected] of Object.entries(expectedCounts)) {
+                    const actual = prefectureCounts[pref] || 0;
+                    const coverage = expected > 0 ? (actual / expected * 100) : 0;
+                    const gap = expected - actual;
+                    const region = regionMap[pref] || '-';
+                    const brands = prefectureBrands[pref] || { '7-Eleven': 0, 'FamilyMart': 0, 'Lawson': 0 };
+
+                    totalActual += actual;
+                    totalExpected += expected;
+
+                    tableData.push({
+                        region,
+                        prefecture: pref,
+                        actual,
+                        expected,
+                        coverage: coverage.toFixed(1),
+                        gap,
+                        brands
+                    });
+                }
+
+                // Update summary
+                document.getElementById('totalStores').textContent = totalActual.toLocaleString();
+                document.getElementById('expectedStores').textContent = totalExpected.toLocaleString();
+                document.getElementById('overallCoverage').textContent =
+                    (totalActual / totalExpected * 100).toFixed(1) + '%';
+                document.getElementById('prefectureCount').textContent = Object.keys(expectedCounts).length;
+
+                // Render table
+                renderTable();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('coverageTable').style.display = 'table';
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML =
+                    '<p style="color: red;">載入失敗: ' + error.message + '</p>';
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            let lastRegion = null;
+
+            tableData.forEach(row => {
+                // Add region header if changed
+                if (row.region !== lastRegion) {
+                    const headerRow = document.createElement('tr');
+                    headerRow.className = 'region-header';
+                    headerRow.innerHTML = `
+                        <td colspan="7" style="text-align: center; padding: 10px;">
+                            ${row.region}
+                        </td>
+                    `;
+                    tbody.appendChild(headerRow);
+                    lastRegion = row.region;
+                }
+
+                const tr = document.createElement('tr');
+                const coverageNum = parseFloat(row.coverage);
+                const coverageClass = coverageNum >= 80 ? 'coverage-high' :
+                                     coverageNum >= 50 ? 'coverage-medium' : 'coverage-low';
+
+                tr.innerHTML = `
+                    <td>${row.region}</td>
+                    <td><strong>${row.prefecture}</strong></td>
+                    <td>${row.actual.toLocaleString()}</td>
+                    <td>${row.expected.toLocaleString()}</td>
+                    <td>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill ${coverageClass}" style="width: ${Math.min(coverageNum, 100)}%">
+                                ${row.coverage}%
+                            </div>
+                        </div>
+                    </td>
+                    <td style="color: ${row.gap > 0 ? '#f44336' : '#4caf50'}">
+                        ${row.gap > 0 ? '-' : '+'}${Math.abs(row.gap).toLocaleString()}
+                    </td>
+                    <td>
+                        <div class="brand-split">
+                            <div class="brand-item">7-11: ${row.brands['7-Eleven']}</div>
+                            <div class="brand-item">FM: ${row.brands['FamilyMart']}</div>
+                            <div class="brand-item">L: ${row.brands['Lawson']}</div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function sortTable(column) {
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = false;
+            }
+
+            tableData.sort((a, b) => {
+                let aVal, bVal;
+
+                switch (column) {
+                    case 'prefecture':
+                        aVal = a.prefecture;
+                        bVal = b.prefecture;
+                        break;
+                    case 'coverage':
+                        aVal = parseFloat(a.coverage);
+                        bVal = parseFloat(b.coverage);
+                        break;
+                    case 'actual':
+                        aVal = a.actual;
+                        bVal = b.actual;
+                        break;
+                    case 'gap':
+                        aVal = a.gap;
+                        bVal = b.gap;
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aVal < bVal) return currentSort.ascending ? -1 : 1;
+                if (aVal > bVal) return currentSort.ascending ? 1 : -1;
+                return 0;
+            });
+
+            renderTable();
+        }
+
+        window.addEventListener('load', loadData);
+    </script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料驗證頁面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .result {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        h1 { color: #667eea; }
+        .brand { display: inline-block; padding: 4px 8px; border-radius: 4px; margin: 2px; }
+        .brand-711 { background: #4CAF50; color: white; }
+        .brand-fm { background: #2196F3; color: white; }
+        .brand-lawson { background: #FF9800; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🎴 Pokemon TCG Radar - 資料驗證</h1>
+    <div id="loading">載入中...</div>
+    <div id="results" style="display: none;">
+        <div class="result">
+            <h2>📊 資料庫狀態</h2>
+            <p><strong>總店鋪數:</strong> <span id="totalStores" class="success"></span></p>
+            <p><strong>檔案載入時間:</strong> <span id="loadTime"></span></p>
+        </div>
+
+        <div class="result">
+            <h2>🏪 品牌分布</h2>
+            <p>
+                <span class="brand brand-711">🟢 7-Eleven: <span id="count711"></span></span>
+                <span class="brand brand-fm">🟡 FamilyMart: <span id="countFM"></span></span>
+                <span class="brand brand-lawson">🔵 Lawson: <span id="countLawson"></span></span>
+            </p>
+        </div>
+
+        <div class="result">
+            <h2>📍 今日更新的地區</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="text-align: left; padding: 8px;">地區</th>
+                    <th style="text-align: right; padding: 8px;">店鋪數</th>
+                    <th style="text-align: center; padding: 8px;">狀態</th>
+                </tr>
+                <tr><td style="padding: 8px;">栃木 (Tochigi)</td><td id="tochigi" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+                <tr><td style="padding: 8px;">群馬 (Gunma)</td><td id="gunma" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+                <tr><td style="padding: 8px;">奈良 (Nara)</td><td id="nara" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+                <tr><td style="padding: 8px;">佐賀 (Saga)</td><td id="saga" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+                <tr><td style="padding: 8px;">大分 (Oita)</td><td id="oita" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+                <tr><td style="padding: 8px;">和歌山 (Wakayama)</td><td id="wakayama" style="text-align: right; padding: 8px;"></td><td style="text-align: center; padding: 8px;">✅</td></tr>
+            </table>
+        </div>
+
+        <div class="result">
+            <h2>✅ 結論</h2>
+            <p id="conclusion"></p>
+            <p><a href="pokemon-tcg-radar.html" style="display: inline-block; padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 8px; margin-top: 10px;">前往 Pokemon TCG Radar</a></p>
+            <p style="font-size: 12px; color: #666; margin-top: 10px;">
+                💡 如果 Pokemon TCG Radar 顯示舊資料，請按 <strong>Command+Shift+R</strong> (Mac) 或 <strong>Ctrl+Shift+R</strong> (Windows) 強制重新整理。
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const startTime = Date.now();
+
+        fetch('stores.json?t=' + Date.now())  // Add timestamp to bypass cache
+            .then(response => response.json())
+            .then(stores => {
+                const loadTime = Date.now() - startTime;
+
+                // Count brands
+                const brandCounts = {
+                    '7-Eleven': 0,
+                    'FamilyMart': 0,
+                    'Lawson': 0
+                };
+
+                // Count by region
+                const regionCounts = {
+                    'Tochigi': 0,
+                    'Gunma': 0,
+                    'Nara': 0,
+                    'Saga': 0,
+                    'Oita': 0,
+                    'Wakayama': 0
+                };
+
+                stores.forEach(store => {
+                    const brand = store.brand;
+                    if (brandCounts[brand] !== undefined) {
+                        brandCounts[brand]++;
+                    }
+
+                    const lat = store.latitude;
+                    const lon = store.longitude;
+
+                    // Tochigi
+                    if (lat >= 36.1 && lat < 37.1 && lon >= 139.2 && lon < 140.4) {
+                        regionCounts.Tochigi++;
+                    }
+                    // Gunma
+                    else if (lat >= 35.9 && lat < 37.0 && lon >= 138.3 && lon < 139.6) {
+                        regionCounts.Gunma++;
+                    }
+                    // Nara
+                    else if (lat >= 33.8 && lat < 35.0 && lon >= 135.4 && lon < 136.3) {
+                        regionCounts.Nara++;
+                    }
+                    // Saga
+                    else if (lat >= 32.9 && lat < 33.7 && lon >= 129.7 && lon < 130.7) {
+                        regionCounts.Saga++;
+                    }
+                    // Oita
+                    else if (lat >= 32.7 && lat < 33.9 && lon >= 130.7 && lon < 132.1) {
+                        regionCounts.Oita++;
+                    }
+                    // Wakayama
+                    else if (lat >= 33.4 && lat < 34.6 && lon >= 134.9 && lon < 136.0) {
+                        regionCounts.Wakayama++;
+                    }
+                });
+
+                // Display results
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+
+                document.getElementById('totalStores').textContent = stores.length.toLocaleString() + ' 間';
+                document.getElementById('loadTime').textContent = loadTime + ' ms';
+
+                document.getElementById('count711').textContent = brandCounts['7-Eleven'].toLocaleString();
+                document.getElementById('countFM').textContent = brandCounts['FamilyMart'].toLocaleString();
+                document.getElementById('countLawson').textContent = brandCounts['Lawson'].toLocaleString();
+
+                document.getElementById('tochigi').textContent = regionCounts.Tochigi.toLocaleString();
+                document.getElementById('gunma').textContent = regionCounts.Gunma.toLocaleString();
+                document.getElementById('nara').textContent = regionCounts.Nara.toLocaleString();
+                document.getElementById('saga').textContent = regionCounts.Saga.toLocaleString();
+                document.getElementById('oita').textContent = regionCounts.Oita.toLocaleString();
+                document.getElementById('wakayama').textContent = regionCounts.Wakayama.toLocaleString();
+
+                // Conclusion
+                const expected = 29283;
+                if (stores.length === expected) {
+                    document.getElementById('conclusion').innerHTML = `
+                        <span class="success">✅ 資料已成功更新！</span><br>
+                        資料庫包含 ${stores.length.toLocaleString()} 間店鋪（預期：${expected.toLocaleString()}）<br>
+                        所有 6 個地區的資料都已正確載入。
+                    `;
+                } else {
+                    document.getElementById('conclusion').innerHTML = `
+                        <span class="error">⚠️ 資料可能未完全更新</span><br>
+                        當前：${stores.length.toLocaleString()} 間 | 預期：${expected.toLocaleString()} 間
+                    `;
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').innerHTML = `<span class="error">❌ 載入失敗: ${error.message}</span>`;
+            });
+    </script>
+</body>
+</html>

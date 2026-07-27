@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Scripts and logs
+*.log
+*.pid
+*.sh
+*.py
+*.md
+*.txt
+
+# Backups and checkpoints
+checkpoint_*.json
+stores_*.json
+!stores.json
+*.bak.*
+*_backup_*.json
+
+# API usage files
+*_usage.json
+*.pdf
+
+# Personal files
+.CFUserTextEncoding
+.adobe/
+.android/
+.bashrc
+.cagent/
+.claude.json
+.claude/
+.com.futunn.FutuOpenD/
+.config/
+.docker/
+.expo/
+.gitconfig
+.idlerc/
+.lesshst
+.matplotlib/
+.npm-global/
+.npm/
+.npmrc
+.playwright-fb-a/
+.ptcg-browser-a/
+.python_history
+.thumbnails/
+.vscode/
+.warp/
+.zprofile
+.zsh_history
+.zsh_sessions/
+.zshrc
+.zshrc.save
+.你的系统用户名rc
+
+# Directories
+AnyToResource/
+Applications/
+Creative Cloud Files*/
+Desktop/
+Documents/
+Downloads/
+Library/
+Movies/
+Music/
+Nanoleaf Desktop App/
+Pictures/
+Public/
+global-ptcg-tracker/
+insta360/
+personal-finance-app/
+pokemon-tcg-radar-deploy/
+ptcg-pricing-bot/
+
+# Misc
+MirrorTo.ini
+VirtualKey.db
+pokemon-oripa-calculator.html
+pokemon-tcg-radar-backup.html
+pokemon-tcg-radar-v2.html
+prefecture_counts.js

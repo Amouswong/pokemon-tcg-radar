@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>測試店鋪資料載入</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .result { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>店鋪資料載入測試</h1>
+    <button onclick="testLoad()">重新測試</button>
+    <div id="results"></div>
+
+    <script>
+        async function testLoad() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>正在載入...</p>';
+
+            try {
+                // 使用時間戳避免快取
+                const url = 'stores.json?t=' + Date.now();
+                console.log('Fetching:', url);
+
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+
+                const data = await response.json();
+                console.log('Data loaded:', data.length, 'stores');
+
+                // 統計品牌
+                const brands = {};
+                data.forEach(store => {
+                    const brand = store.brand || 'Unknown';
+                    brands[brand] = (brands[brand] || 0) + 1;
+                });
+
+                // 統計地區（前10名）
+                const prefectures = {};
+                const prefMap = {
+                    'Tokyo': '東京都',
+                    'Osaka': '大阪府',
+                    'Kanagawa': '神奈川県',
+                    'Chiba': '千葉県',
+                    'Saitama': '埼玉県',
+                    'Fukuoka': '福岡県',
+                    'Hyogo': '兵庫県',
+                    'Kyoto': '京都府',
+                    'Ibaraki': '茨城県',
+                    'Miyagi': '宮城県'
+                };
+
+                data.forEach(store => {
+                    const address = store.address || '';
+                    for (const [eng, jp] of Object.entries(prefMap)) {
+                        if (address.includes(eng)) {
+                            prefectures[jp] = (prefectures[jp] || 0) + 1;
+                            break;
+                        }
+                    }
+                });
+
+                let html = `
+                    <div class="result success">
+                        <h2>✅ 載入成功</h2>
+                        <p><strong>總店鋪數：${data.length.toLocaleString()} 間</strong></p>
+                        <p>檔案大小：${(JSON.stringify(data).length / 1024 / 1024).toFixed(2)} MB</p>
+                        <p>載入時間：${new Date().toLocaleTimeString()}</p>
+                    </div>
+
+                    <div class="result">
+                        <h3>品牌分佈</h3>
+                        <ul>
+                `;
+
+                for (const [brand, count] of Object.entries(brands).sort((a, b) => b[1] - a[1])) {
+                    const pct = (count / data.length * 100).toFixed(1);
+                    html += `<li>${brand}: ${count.toLocaleString()} 間 (${pct}%)</li>`;
+                }
+
+                html += `
+                        </ul>
+                    </div>
+
+                    <div class="result">
+                        <h3>主要地區分佈</h3>
+                        <ul>
+                `;
+
+                for (const [pref, count] of Object.entries(prefectures).sort((a, b) => b[1] - a[1])) {
+                    html += `<li>${pref}: ${count.toLocaleString()} 間</li>`;
+                }
+
+                html += `
+                        </ul>
+                    </div>
+                `;
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="result error">
+                        <h2>❌ 載入失敗</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 頁面載入時自動測試
+        window.addEventListener('load', testLoad);
+    </script>
+</body>
+</html>
