@@ -3370,6 +3370,14 @@
                 return;
             }
 
+            // Change button to "Cancel" when navigation flow starts
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '✕ 取消';
+                googleMapsButton.style.background = '#f44336';
+                googleMapsButton.onclick = cancelGoogleMapsNavigation;
+            }
+
             const filters = getFilters();
             const allStoresInRoute = [];
 
@@ -3534,9 +3542,42 @@
                     // Step 2: Enter map selection mode for route planning
                     directMapSelectionForRoute(storesInRoute, routePoints[0], routePoints[routePoints.length - 1], allStoresInRoute);
                 },
-                null
+                function() {
+                    // User cancelled brand selection - restore button
+                    cancelGoogleMapsNavigation();
+                }
             );
         }
+
+        // Cancel Google Maps navigation flow and restore button
+        function cancelGoogleMapsNavigation() {
+            // Exit selection mode
+            startStoreSelectionMode = false;
+            isSelectingStartStore = false;
+
+            // Remove selection message
+            const msg = document.getElementById('selection-message');
+            if (msg) msg.remove();
+
+            // Remove pulsing effect from all markers
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker && layer.storeData) {
+                    const element = layer.getElement();
+                    if (element) {
+                        element.style.animation = '';
+                    }
+                }
+            });
+
+            // Restore Google Maps button
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '🗺️ Google Maps';
+                googleMapsButton.style.background = '#2196F3';
+                googleMapsButton.onclick = openRouteInGoogleMaps;
+            }
+        }
+
         window.openRouteInGoogleMaps = openRouteInGoogleMaps;
         window.openRouteInGoogleMaps = openRouteInGoogleMaps;
 
@@ -3546,6 +3587,14 @@
             if (!cluster || cluster.stores.length === 0) {
                 showCustomAlert('錯誤', '搵唔到區域資訊。');
                 return;
+            }
+
+            // Change button to "Cancel" when navigation flow starts
+            const googleMapsButton = document.getElementById('googleMapsButton');
+            if (googleMapsButton) {
+                googleMapsButton.textContent = '✕ 取消';
+                googleMapsButton.style.background = '#f44336';
+                googleMapsButton.onclick = cancelGoogleMapsNavigation;
             }
 
             const allStoresInCluster = cluster.stores;
@@ -3648,7 +3697,10 @@
                     const routeMode = routeModeInput ? routeModeInput.value : 'exact';
                     directMapSelectionForArea(storesInCluster, cluster.center, clusterIdx, allStoresInCluster, routeMode, preferred);
                 },
-                null
+                function() {
+                    // User cancelled brand selection - restore button
+                    cancelGoogleMapsNavigation();
+                }
             );
         }
         window.openAreaRouteInGoogleMaps = openAreaRouteInGoogleMaps;
@@ -4698,12 +4750,11 @@
             document.getElementById('radiusCount').textContent = `${cluster.stores.length} 間`;
             document.getElementById('radiusDetails').innerHTML = detailsHtml;
 
-            // Add Google Maps button for area stores
+            // Add Google Maps button for area stores (no clear button in area mode)
             if (cluster.stores.length > 0) {
                 document.getElementById('radiusButtons').innerHTML = `
                     <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button onclick="openAreaRouteInGoogleMaps(${clusterIdx})" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
-                        <button onclick="clearRoute()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
+                        <button id="googleMapsButton" onclick="openAreaRouteInGoogleMaps(${clusterIdx})" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; width: 100%;">🗺️ Google Maps</button>
                     </div>
                 `;
             } else {
@@ -4942,7 +4993,7 @@
             if (storesCount > 0) {
                 document.getElementById('radiusButtons').innerHTML = `
                     <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button onclick="openRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
+                        <button id="googleMapsButton" onclick="openRouteInGoogleMaps()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">🗺️ Google Maps</button>
                         <button onclick="clearRoute()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; flex: 1;">✕ 清除</button>
                     </div>
                 `;
