@@ -2441,13 +2441,13 @@
             const preferredIds = new Set(storesInRoute.map(s => s.id));
             const storesToRender = allStoresInRoute && allStoresInRoute.length > 0 ? allStoresInRoute : storesInRoute;
 
-            // Add markers for all stores in route
+            // Add markers for all stores in route (all stores remain clickable, no dimming)
             storesToRender.forEach(store => {
                 const isPreferred = preferredIds.has(store.id);
                 const brandIcon = BRAND_ICONS[store.brand] || '🏪';
                 const icon = L.divIcon({
                     className: 'marker-icon',
-                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}">${brandIcon}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
@@ -2891,60 +2891,119 @@
             return left.slice(0, -1).concat(right);
         }
 
-        const PASS_BY_METERS = 30; // "in eyesight" distance for a store to count as passed
+        const PASS_BY_METERS = 50; // Distance for a store to count as "passed by" the route
 
         function calculateAndShowCoverageRoute(storesInRadius, startPos, originalCenter) {
             const routeStores = storesInRadius.filter(s => startPos.distanceTo(s.latlng) > 5);
 
-            // Step 1: full Nearest-Neighbour TSP path through EVERY matching store
-            // (not capped at 10) — this is the shape we want the route to follow.
-            const orderedStores = [];
-            const visited = new Set();
+            if (routeStores.length === 0) {
+                showCustomAlert('錯誤', '冇店舖可以計算路線。');
+                return;
+            }
+
+            // Strategy: Find the shortest path that passes by as many stores as possible
+            // Use a greedy approach: always move toward the direction that covers the most uncovered stores
+
+            let turnPoints = [];
+            const MAX_TURN_POINTS = 9;
+            const coveredStores = new Set();
             let currentPos = startPos;
-            while (orderedStores.length < routeStores.length) {
-                let nearestIdx = -1, minDist = Infinity;
-                for (let i = 0; i < routeStores.length; i++) {
-                    if (visited.has(i)) continue;
-                    const dist = currentPos.distanceTo(routeStores[i].latlng);
-                    if (dist < minDist) { minDist = dist; nearestIdx = i; }
-                }
-                if (nearestIdx !== -1) {
-                    visited.add(nearestIdx);
-                    orderedStores.push(routeStores[nearestIdx]);
-                    currentPos = routeStores[nearestIdx].latlng;
-                }
-            }
 
-            const fullPath = [{ latlng: startPos }, ...orderedStores];
-
-            // Step 2: thin the path down to <=9 intermediate pins (Google Maps
-            // waypoint limit) via Douglas-Peucker, increasing epsilon until it fits.
-            let epsilon = PASS_BY_METERS;
-            let simplified = _douglasPeucker(fullPath, epsilon);
-            while (simplified.length - 2 > 9 && epsilon < 5000) {
-                epsilon *= 1.5;
-                simplified = _douglasPeucker(fullPath, epsilon);
-            }
-
-            // Pin stores = simplified path minus the start point itself.
-            const pinStores = simplified.slice(1).filter(s => s !== fullPath[0]);
-            const pinIds = new Set(pinStores.map(s => s.id));
-
-            // Step 3: count "passed by" — every store within PASS_BY_METERS of the
-            // final straight-line pin-to-pin path (includes the pins themselves).
-            const pathPoints = [startPos, ...pinStores.map(s => s.latlng)];
-            let passedByCount = 0;
-            routeStores.forEach(store => {
-                if (pinIds.has(store.id)) { passedByCount++; return; }
-                for (let i = 0; i < pathPoints.length - 1; i++) {
-                    if (_distPointToSegmentMeters(store.latlng, pathPoints[i], pathPoints[i + 1]) <= PASS_BY_METERS) {
-                        passedByCount++;
-                        return;
+            // Helper: Count how many uncovered stores would be covered by moving to a point
+            function countNewCoverage(fromPos, toPos) {
+                let count = 0;
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+                    if (_distPointToSegmentMeters(store.latlng, fromPos, toPos) <= PASS_BY_METERS) {
+                        count++;
                     }
-                }
-            });
+                });
+                return count;
+            }
 
-            // Total distance along the final (pin-only) path.
+            // Helper: Mark stores as covered by a segment
+            function markCovered(fromPos, toPos) {
+                routeStores.forEach(store => {
+                    if (_distPointToSegmentMeters(store.latlng, fromPos, toPos) <= PASS_BY_METERS) {
+                        coveredStores.add(store.id);
+                    }
+                });
+            }
+
+            // Greedy algorithm: iteratively find the best next turn point
+            while (turnPoints.length < MAX_TURN_POINTS && coveredStores.size < routeStores.length) {
+                let bestPoint = null;
+                let bestCoverage = 0;
+                let bestDist = Infinity;
+
+                // Sample candidate points: positions that would maximize coverage
+                // Try points near each uncovered store
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+
+                    // Try the store's position
+                    const coverage = countNewCoverage(currentPos, store.latlng);
+                    const dist = currentPos.distanceTo(store.latlng);
+
+                    // Prefer higher coverage, break ties with shorter distance
+                    if (coverage > bestCoverage || (coverage === bestCoverage && dist < bestDist)) {
+                        bestPoint = store.latlng;
+                        bestCoverage = coverage;
+                        bestDist = dist;
+                    }
+
+                    // Also try points offset from the store (to avoid stopping at the store)
+                    const offsetDist = 30; // 30 meters offset
+                    const bearing = Math.atan2(store.latlng.lng - currentPos.lng, store.latlng.lat - currentPos.lat);
+                    const offsetLat = store.latlng.lat + (offsetDist / 111000) * Math.cos(bearing);
+                    const offsetLng = store.latlng.lng + (offsetDist / (111000 * Math.cos(store.latlng.lat * Math.PI / 180))) * Math.sin(bearing);
+                    const offsetPoint = L.latLng(offsetLat, offsetLng);
+
+                    const offsetCoverage = countNewCoverage(currentPos, offsetPoint);
+                    const offsetDistVal = currentPos.distanceTo(offsetPoint);
+
+                    if (offsetCoverage > bestCoverage || (offsetCoverage === bestCoverage && offsetDistVal < bestDist)) {
+                        bestPoint = offsetPoint;
+                        bestCoverage = offsetCoverage;
+                        bestDist = offsetDistVal;
+                    }
+                });
+
+                // If we found a good point, add it
+                if (bestPoint && bestCoverage > 0) {
+                    turnPoints.push(bestPoint);
+                    markCovered(currentPos, bestPoint);
+                    currentPos = bestPoint;
+                } else {
+                    // No more stores to cover
+                    break;
+                }
+            }
+
+            // If we still have uncovered stores and room for more turn points,
+            // add the farthest uncovered store to extend coverage
+            if (turnPoints.length < MAX_TURN_POINTS && coveredStores.size < routeStores.length) {
+                let farthestStore = null;
+                let maxDist = 0;
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+                    const dist = currentPos.distanceTo(store.latlng);
+                    if (dist > maxDist) {
+                        maxDist = dist;
+                        farthestStore = store;
+                    }
+                });
+                if (farthestStore) {
+                    turnPoints.push(farthestStore.latlng);
+                    markCovered(currentPos, farthestStore.latlng);
+                }
+            }
+
+            // Step 3: Count stores passed by the turn-point route
+            const pathPoints = [startPos, ...turnPoints];
+            let passedByCount = coveredStores.size;
+
+            // Calculate total distance
             let totalDist = 0;
             for (let i = 0; i < pathPoints.length - 1; i++) {
                 totalDist += pathPoints[i].distanceTo(pathPoints[i + 1]);
@@ -2954,28 +3013,29 @@
             const startCoord = coord(startPos.lat, startPos.lng);
             let origin = startCoord;
             let destination = startCoord;
-            let waypointStores = [];
+            let waypointCoords = [];
 
-            if (pinStores.length > 0) {
-                const last = pinStores[pinStores.length - 1];
-                destination = coord(last.latlng.lat, last.latlng.lng);
-                waypointStores = pinStores.slice(0, -1);
+            if (turnPoints.length > 0) {
+                const last = turnPoints[turnPoints.length - 1];
+                destination = coord(last.lat, last.lng);
+                waypointCoords = turnPoints.slice(0, -1).map(tp => coord(tp.lat, tp.lng));
             }
 
             let waypoints = '';
-            if (waypointStores.length > 0) {
-                waypoints = `&waypoints=${waypointStores.map(s => coord(s.latlng.lat, s.latlng.lng)).join('|')}`;
+            if (waypointCoords.length > 0) {
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
             }
 
             const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
             console.log('🗺️ [Coverage] Nav URL:', googleMapsUrl);
+            console.log('   Turn points:', turnPoints.length, '| Stores passed:', passedByCount, '/', routeStores.length);
 
             const walkTime = Math.ceil(totalDist / 80); // 80m/min walking
             const driveTime = Math.max(1, Math.ceil(totalDist / 500)); // ~30km/h city driving = 500m/min
 
             let message = `已經整好路線！\n\n`;
             message += `方式: 路過最多店（最短路線）\n`;
-            message += `實際停靠 (pin): ${pinStores.length} 間\n`;
+            message += `轉折點: ${turnPoints.length} 個\n`;
             message += `路過範圍內: ${passedByCount} / ${routeStores.length} 間`;
             if (routeStores.length > 0) {
                 message += ` (${Math.round(passedByCount / routeStores.length * 100)}%)`;
@@ -2984,7 +3044,8 @@
             message += `預計需時:\n`;
             message += `  🚗 開車約 ${driveTime} 分鐘\n`;
             message += `  🚶 步行約 ${walkTime} 分鐘\n\n`;
-            message += `※ 路過店數係以直線距離估算,實際路面路線可能有落差。\n\n`;
+            message += `※ 路過店數係以 ${PASS_BY_METERS}米 內直線距離估算\n`;
+            message += `※ 轉折點係計算出嚟嘅地理位置，唔係實際店舖\n\n`;
             message += `用 Google Maps 開啟？`;
 
             showCustomConfirm('確認路線', message,
@@ -3086,6 +3147,8 @@
                         const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
                         showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
                     }
+                    // After opening Google Maps, return to Stage 2 (restore button, keep area/stores)
+                    cancelRouteNavigation();
                 },
                 () => {
                     // User cancelled - return to store selection mode WITHOUT resetting everything
@@ -3210,14 +3273,35 @@
                         const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
                         showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
                     }
+                    // After opening Google Maps, return to Stage 2 (restore button, keep area/stores)
+                    cancelRouteNavigation();
                 },
-                null
+                () => {
+                    // User cancelled - return to store selection mode WITHOUT resetting everything
+                    startStoreSelectionMode = true;
+                    isSelectingStartStore = true;
+
+                    // Show selection message again
+                    const message = document.createElement('div');
+                    message.id = 'selection-message';
+                    message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+                    message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點';
+                    document.body.appendChild(message);
+
+                    // Remove message after 5 seconds
+                    setTimeout(() => {
+                        const msg = document.getElementById('selection-message');
+                        if (msg) {
+                            msg.style.animation = 'fadeOut 0.3s';
+                            setTimeout(() => msg.remove(), 300);
+                        }
+                    }, 5000);
+                }
             );
         }
 
-        // Coverage-mode route for the area/cluster flow: same TSP + Douglas-Peucker
-        // simplification as calculateAndShowCoverageRoute, but the loop returns to the
-        // chosen start store at the end (round trip), matching calculateAndShowRouteForArea.
+        // Coverage-mode route for the area/cluster flow: creates turn points
+        // to maximize store coverage, with round trip back to start store.
         function calculateAndShowCoverageRouteForArea(startStore, storesInCluster, clusterIdx) {
             const startPos = L.latLng(startStore.latitude, startStore.longitude);
             const routeStores = storesInCluster
@@ -3225,50 +3309,118 @@
                 .map(s => ({ ...s, latlng: L.latLng(s.latitude, s.longitude) }))
                 .filter(s => startPos.distanceTo(s.latlng) > 5);
 
-            // Step 1: full Nearest-Neighbour TSP through EVERY matching store.
-            const orderedStores = [];
-            const visited = new Set();
+            if (routeStores.length === 0) {
+                showCustomAlert('錯誤', '冇其他店舖可以計算路線。');
+                return;
+            }
+
+            // Strategy: Find the shortest path that passes by as many stores as possible
+            let turnPoints = [];
+            const MAX_TURN_POINTS = 9;
+            const coveredStores = new Set();
             let currentPos = startPos;
-            while (orderedStores.length < routeStores.length) {
-                let nearestIdx = -1, minDist = Infinity;
-                for (let i = 0; i < routeStores.length; i++) {
-                    if (visited.has(i)) continue;
-                    const dist = currentPos.distanceTo(routeStores[i].latlng);
-                    if (dist < minDist) { minDist = dist; nearestIdx = i; }
-                }
-                if (nearestIdx !== -1) {
-                    visited.add(nearestIdx);
-                    orderedStores.push(routeStores[nearestIdx]);
-                    currentPos = routeStores[nearestIdx].latlng;
-                }
-            }
 
-            const fullPath = [{ latlng: startPos }, ...orderedStores];
-
-            // Step 2: thin down to <=9 intermediate pins via Douglas-Peucker.
-            let epsilon = PASS_BY_METERS;
-            let simplified = _douglasPeucker(fullPath, epsilon);
-            while (simplified.length - 2 > 9 && epsilon < 5000) {
-                epsilon *= 1.5;
-                simplified = _douglasPeucker(fullPath, epsilon);
-            }
-
-            const pinStores = simplified.slice(1).filter(s => s !== fullPath[0]);
-            const pinIds = new Set(pinStores.map(s => s.id));
-
-            // Step 3: count "passed by" against the final pin-to-pin path, INCLUDING
-            // the return leg back to the start store (round trip).
-            const pathPoints = [startPos, ...pinStores.map(s => s.latlng), startPos];
-            let passedByCount = 0;
-            routeStores.forEach(store => {
-                if (pinIds.has(store.id)) { passedByCount++; return; }
-                for (let i = 0; i < pathPoints.length - 1; i++) {
-                    if (_distPointToSegmentMeters(store.latlng, pathPoints[i], pathPoints[i + 1]) <= PASS_BY_METERS) {
-                        passedByCount++;
-                        return;
+            // Helper: Count how many uncovered stores would be covered by moving to a point
+            function countNewCoverage(fromPos, toPos) {
+                let count = 0;
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+                    if (_distPointToSegmentMeters(store.latlng, fromPos, toPos) <= PASS_BY_METERS) {
+                        count++;
                     }
+                });
+                return count;
+            }
+
+            // Helper: Mark stores as covered by a segment
+            function markCovered(fromPos, toPos) {
+                routeStores.forEach(store => {
+                    if (_distPointToSegmentMeters(store.latlng, fromPos, toPos) <= PASS_BY_METERS) {
+                        coveredStores.add(store.id);
+                    }
+                });
+            }
+
+            // Greedy algorithm: iteratively find the best next turn point
+            while (turnPoints.length < MAX_TURN_POINTS && coveredStores.size < routeStores.length) {
+                let bestPoint = null;
+                let bestCoverage = 0;
+                let bestDist = Infinity;
+
+                // Sample candidate points: try positions near each uncovered store
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+
+                    // Try the store's position
+                    const coverage = countNewCoverage(currentPos, store.latlng);
+                    const dist = currentPos.distanceTo(store.latlng);
+
+                    if (coverage > bestCoverage || (coverage === bestCoverage && dist < bestDist)) {
+                        bestPoint = store.latlng;
+                        bestCoverage = coverage;
+                        bestDist = dist;
+                    }
+
+                    // Also try points offset from the store (to avoid stopping at the store)
+                    const offsetDist = 30; // 30 meters offset
+                    const bearing = Math.atan2(store.latlng.lng - currentPos.lng, store.latlng.lat - currentPos.lat);
+                    const offsetLat = store.latlng.lat + (offsetDist / 111000) * Math.cos(bearing);
+                    const offsetLng = store.latlng.lng + (offsetDist / (111000 * Math.cos(store.latlng.lat * Math.PI / 180))) * Math.sin(bearing);
+                    const offsetPoint = L.latLng(offsetLat, offsetLng);
+
+                    const offsetCoverage = countNewCoverage(currentPos, offsetPoint);
+                    const offsetDistVal = currentPos.distanceTo(offsetPoint);
+
+                    if (offsetCoverage > bestCoverage || (offsetCoverage === bestCoverage && offsetDistVal < bestDist)) {
+                        bestPoint = offsetPoint;
+                        bestCoverage = offsetCoverage;
+                        bestDist = offsetDistVal;
+                    }
+                });
+
+                // If we found a good point, add it
+                if (bestPoint && bestCoverage > 0) {
+                    turnPoints.push(bestPoint);
+                    markCovered(currentPos, bestPoint);
+                    currentPos = bestPoint;
+                } else {
+                    break;
                 }
-            });
+            }
+
+            // If we still have uncovered stores and room for more turn points,
+            // add the farthest uncovered store to extend coverage
+            if (turnPoints.length < MAX_TURN_POINTS && coveredStores.size < routeStores.length) {
+                let farthestStore = null;
+                let maxDist = 0;
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+                    const dist = currentPos.distanceTo(store.latlng);
+                    if (dist > maxDist) {
+                        maxDist = dist;
+                        farthestStore = store;
+                    }
+                });
+                if (farthestStore) {
+                    turnPoints.push(farthestStore.latlng);
+                    markCovered(currentPos, farthestStore.latlng);
+                }
+            }
+
+            // Count stores passed by the route (including return trip to start)
+            const pathPoints = [startPos, ...turnPoints, startPos];
+            let passedByCount = coveredStores.size;
+
+            // Also check the return leg for any additional coverage
+            if (turnPoints.length > 0) {
+                routeStores.forEach(store => {
+                    if (coveredStores.has(store.id)) return;
+                    const lastTurnPoint = turnPoints[turnPoints.length - 1];
+                    if (_distPointToSegmentMeters(store.latlng, lastTurnPoint, startPos) <= PASS_BY_METERS) {
+                        passedByCount++;
+                    }
+                });
+            }
 
             let totalDist = 0;
             for (let i = 0; i < pathPoints.length - 1; i++) {
@@ -3279,21 +3431,21 @@
             const startCoord = coord(startStore.latitude, startStore.longitude);
             let origin = startCoord;
             let destination = startCoord;
-            let waypointStores = [];
+            let waypointCoords = [];
 
-            if (pinStores.length > 0) {
-                const last = pinStores[pinStores.length - 1];
-                destination = coord(last.latlng.lat, last.latlng.lng);
-                waypointStores = pinStores.slice(0, -1);
+            if (turnPoints.length > 0) {
+                // Round trip: start -> turn points -> back to start
+                waypointCoords = turnPoints.map(tp => coord(tp.lat, tp.lng));
             }
 
             let waypoints = '';
-            if (waypointStores.length > 0) {
-                waypoints = `&waypoints=${waypointStores.map(s => coord(s.latlng.lat, s.latlng.lng)).join('|')}`;
+            if (waypointCoords.length > 0) {
+                waypoints = `&waypoints=${waypointCoords.join('|')}`;
             }
 
             const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}&travelmode=driving`;
             console.log('🗺️ [Area Coverage] Nav URL:', googleMapsUrl);
+            console.log('   Turn points:', turnPoints.length, '| Stores passed:', passedByCount, '/', routeStores.length);
 
             const walkTime = Math.ceil(totalDist / 80);
             const driveTime = Math.max(1, Math.ceil(totalDist / 500));
@@ -3301,14 +3453,17 @@
             const isHighest = clusterIdx === window.maxClusterIdx;
             let message = `${isHighest ? '⭐ ' : ''}起點店舖: ${BRAND_ICONS[startStore.brand]} ${startStore.brand} ${startStore.name}\n\n`;
             message += `方式: 路過最多店（最短路線）\n`;
-            message += `實際停靠 (pin): ${pinStores.length + 1} 間\n`;
-            message += `路過範圍內: ${passedByCount + 1} / ${routeStores.length + 1} 間`;
-            message += ` (${Math.round((passedByCount + 1) / (routeStores.length + 1) * 100)}%)`;
+            message += `轉折點: ${turnPoints.length} 個\n`;
+            message += `路過範圍內: ${passedByCount} / ${routeStores.length} 間`;
+            if (routeStores.length > 0) {
+                message += ` (${Math.round(passedByCount / routeStores.length * 100)}%)`;
+            }
             message += `\n總距離: ${(totalDist / 1000).toFixed(1)} km\n`;
             message += `預計需時:\n`;
             message += `  🚗 開車約 ${driveTime} 分鐘\n`;
             message += `  🚶 步行約 ${walkTime} 分鐘\n\n`;
-            message += `※ 路過店數係以直線距離估算,實際路面路線可能有落差。\n\n`;
+            message += `※ 路過店數係以 ${PASS_BY_METERS}米 內直線距離估算\n`;
+            message += `※ 轉折點係計算出嚟嘅地理位置，唔係實際店舖\n\n`;
             message += `用 Google Maps 開啟？`;
 
             showCustomConfirm('確認路線', message,
@@ -3318,8 +3473,30 @@
                         const linkHtml = `<a href="${googleMapsUrl}" target="_blank" style="color: #2196F3; text-decoration: underline;">㩒呢度用 Google Maps 開啟</a>`;
                         showCustomAlert('彈出視窗被封鎖', `瀏覽器封鎖咗彈出視窗。\n\n${linkHtml}\n\n或者喺瀏覽器設定允許彈出視窗。`);
                     }
+                    // After opening Google Maps, return to Stage 2 (restore button, keep area/stores)
+                    cancelRouteNavigation();
                 },
-                null
+                () => {
+                    // User cancelled - return to store selection mode WITHOUT resetting everything
+                    startStoreSelectionMode = true;
+                    isSelectingStartStore = true;
+
+                    // Show selection message again
+                    const message = document.createElement('div');
+                    message.id = 'selection-message';
+                    message.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #4CAF50; color: white; padding: 15px 30px; border-radius: 8px; z-index: 9999; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: fadeIn 0.3s;';
+                    message.innerHTML = '🎯 㩒地圖上嘅店舖圖示嚟揀起點';
+                    document.body.appendChild(message);
+
+                    // Remove message after 5 seconds
+                    setTimeout(() => {
+                        const msg = document.getElementById('selection-message');
+                        if (msg) {
+                            msg.style.animation = 'fadeOut 0.3s';
+                            setTimeout(() => msg.remove(), 300);
+                        }
+                    }, 5000);
+                }
             );
         }
 
@@ -3375,7 +3552,7 @@
             if (googleMapsButton) {
                 googleMapsButton.textContent = '✕ 取消';
                 googleMapsButton.style.background = '#f44336';
-                googleMapsButton.onclick = cancelGoogleMapsNavigation;
+                googleMapsButton.onclick = cancelRouteNavigation;
             }
 
             const filters = getFilters();
@@ -3544,13 +3721,13 @@
                 },
                 function() {
                     // User cancelled brand selection - restore button
-                    cancelGoogleMapsNavigation();
+                    cancelRouteNavigation();
                 }
             );
         }
 
-        // Cancel Google Maps navigation flow and restore button
-        function cancelGoogleMapsNavigation() {
+        // Cancel route/area navigation flow and restore button (without clearing area)
+        function cancelRouteNavigation() {
             // Exit selection mode
             startStoreSelectionMode = false;
             isSelectingStartStore = false;
@@ -3574,7 +3751,16 @@
             if (googleMapsButton) {
                 googleMapsButton.textContent = '🗺️ Google Maps';
                 googleMapsButton.style.background = '#2196F3';
-                googleMapsButton.onclick = openRouteInGoogleMaps;
+
+                // Determine which onclick handler to use based on the mode
+                if (tempStoresForSelection && tempStoresForSelection.clusterIdx !== undefined) {
+                    // Area mode - restore openAreaRouteInGoogleMaps with clusterIdx
+                    const clusterIdx = tempStoresForSelection.clusterIdx;
+                    googleMapsButton.onclick = () => openAreaRouteInGoogleMaps(clusterIdx);
+                } else {
+                    // Route mode - restore openRouteInGoogleMaps
+                    googleMapsButton.onclick = openRouteInGoogleMaps;
+                }
             }
         }
 
@@ -3594,7 +3780,7 @@
             if (googleMapsButton) {
                 googleMapsButton.textContent = '✕ 取消';
                 googleMapsButton.style.background = '#f44336';
-                googleMapsButton.onclick = cancelGoogleMapsNavigation;
+                googleMapsButton.onclick = cancelRouteNavigation;
             }
 
             const allStoresInCluster = cluster.stores;
@@ -3699,7 +3885,7 @@
                 },
                 function() {
                     // User cancelled brand selection - restore button
-                    cancelGoogleMapsNavigation();
+                    cancelRouteNavigation();
                 }
             );
         }
@@ -3857,13 +4043,13 @@
             const preferredIds = new Set(storesInCluster.map(s => s.id));
             const storesToRender = allStoresInCluster && allStoresInCluster.length > 0 ? allStoresInCluster : storesInCluster;
 
-            // Add markers for all stores in cluster
+            // Add markers for all stores in cluster (all stores remain clickable, no dimming)
             storesToRender.forEach(store => {
                 const isPreferred = preferredIds.has(store.id);
                 const brandIcon = BRAND_ICONS[store.brand] || '🏪';
                 const icon = L.divIcon({
                     className: 'marker-icon',
-                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}" style="opacity: ${isPreferred ? '1' : '0.6'}; filter: ${isPreferred ? 'none' : 'grayscale(50%)'};">${brandIcon}</div>`,
+                    html: `<div class="store-marker-in-radius" data-store-id="${store.id}">${brandIcon}</div>`,
                     iconSize: [30, 30],
                     iconAnchor: [15, 15]
                 });
